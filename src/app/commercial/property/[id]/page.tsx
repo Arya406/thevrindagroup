@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -35,21 +35,84 @@ import {
   Card,
   Input,
 } from "@/components/ui";
-import { MOCK_COMMERCIAL_PROPERTIES } from "@/data/mockCommercial";
 import { CommercialPropertyCard } from "@/components/commercial/CommercialPropertyCard";
 import { CommercialEnquiryModal } from "@/components/commercial/CommercialEnquiryModal";
 import { ScheduleCommercialVisitModal } from "@/components/commercial/ScheduleCommercialVisitModal";
+import { useAuth } from "@/lib/auth/auth-context";
+import { FavoriteApiService } from "@/lib/services/favorite-api";
+import { SiteVisitApiService } from "@/lib/services/site-visit-api";
+import { PropertyApiService, mapPropertyToCommercialProperty } from "@/lib/services/property-api";
+import { CommercialProperty } from "@/types/commercial";
 
 export default function CommercialDetailPage() {
   const params = useParams();
   const propertyId = params?.id as string;
 
-  const property =
-    MOCK_COMMERCIAL_PROPERTIES.find((p) => p.id === propertyId) ||
-    MOCK_COMMERCIAL_PROPERTIES[0];
+  const [liveProperty, setLiveProperty] = useState<CommercialProperty | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [similarCommercial, setSimilarCommercial] = useState<CommercialProperty[]>([]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
+      if (!propertyId) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        let p = await PropertyApiService.getPropertyById(propertyId);
+        if (!p) {
+          p = await PropertyApiService.getPropertyBySlug(propertyId);
+        }
+        if (isMounted) {
+          if (p) {
+            setLiveProperty(mapPropertyToCommercialProperty(p));
+          } else {
+            setLiveProperty(null);
+          }
+        }
+      } catch {
+        if (isMounted) {
+          setLiveProperty(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [propertyId]);
+
+  const property = liveProperty;
+
+  // Live Similar Commercial Properties
+  useEffect(() => {
+    if (property?.city) {
+      PropertyApiService.getProperties({
+        city: property.city !== "All" ? property.city : undefined,
+        limit: 4,
+      })
+        .then((res) => {
+          const mapped = (res.properties || []).map(mapPropertyToCommercialProperty);
+          setSimilarCommercial(mapped.filter((p) => p.id !== property.id).slice(0, 3));
+        })
+        .catch(() => {
+          setSimilarCommercial([]);
+        });
+    }
+  }, [property?.id, property?.city]);
+
+  const { isAuthenticated, requireAuth } = useAuth();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isTogglingFav, setIsTogglingFav] = useState(false);
   const [isEnquiryOpen, setIsEnquiryOpen] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
@@ -59,30 +122,159 @@ export default function CommercialDetailPage() {
   const [visitSlot, setVisitSlot] = useState("10:00 AM - 12:00 PM");
   const [isVisitBooked, setIsVisitBooked] = useState(false);
 
-  const handleFavoriteToggle = () => {
+  const executeFavoriteToggle = async () => {
+    if (isTogglingFav) return;
+    setIsTogglingFav(true);
     const nextState = !isFavorite;
     setIsFavorite(nextState);
-    setSaveToast(
-      nextState
-        ? "Commercial asset added to your shortlist!"
-        : "Removed from your shortlisted properties."
-    );
-    setTimeout(() => setSaveToast(null), 3000);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
+    if (isUuid) {
+      try {
+        const res = await FavoriteApiService.toggleFavorite(propertyId, !nextState);
+        setSaveToast(
+          res.isFavorited
+            ? "Commercial asset added to your shortlist!"
+            : "Removed from your shortlisted properties."
+        );
+      } catch (err: unknown) {
+        setIsFavorite(!nextState);
+        const msg = err instanceof Error ? err.message : "Unable to update saved property.";
+        setSaveToast(msg);
+      } finally {
+        setIsTogglingFav(false);
+        setTimeout(() => setSaveToast(null), 3000);
+      }
+    } else {
+      setSaveToast(
+        nextState
+          ? "Commercial asset added to your shortlist!"
+          : "Removed from your shortlisted properties."
+      );
+      setIsTogglingFav(false);
+      setTimeout(() => setSaveToast(null), 3000);
+    }
+  };
+
+  const handleFavoriteToggle = () => {
+    if (!isAuthenticated) {
+      const allowed = requireAuth({
+        title: "Sign in to save commercial properties",
+        message: "Create an account to save and track shortlisted commercial assets.",
+        onAuthenticated: () => executeFavoriteToggle(),
+      });
+      if (allowed) {
+        executeFavoriteToggle();
+      }
+      return;
+    }
+    executeFavoriteToggle();
+  };
+
+  const [isBookingLoading, setIsBookingLoading] = useState(false);
+
+  const executeBookCommercialVisit = async () => {
+    if (!visitDate || isBookingLoading || !property) return;
+    setIsBookingLoading(true);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(property.id);
+    if (isUuid) {
+      try {
+        let hour = 11;
+        if (visitSlot.startsWith("10:")) hour = 10;
+        else if (visitSlot.startsWith("12:")) hour = 12;
+        else if (visitSlot.startsWith("02:")) hour = 14;
+        else if (visitSlot.startsWith("04:")) hour = 16;
+
+        const scheduledDate = new Date(`${visitDate}T${String(hour).padStart(2, "0")}:00:00.000Z`);
+        const targetIso = scheduledDate.toISOString();
+
+        await SiteVisitApiService.createSiteVisit(property.id, {
+          scheduledAt: targetIso,
+          buyerNote: `Commercial inspection requested for ${visitSlot}`,
+        });
+
+        setIsVisitBooked(true);
+        setSaveToast(`Site visit requested successfully for ${visitDate} (${visitSlot})!`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Unable to book inspection.";
+        setSaveToast(msg);
+      } finally {
+        setIsBookingLoading(false);
+        setTimeout(() => setSaveToast(null), 4000);
+      }
+    } else {
+      setIsVisitBooked(true);
+      setIsBookingLoading(false);
+      setSaveToast(`Site visit requested for ${visitDate} (${visitSlot}).`);
+      setTimeout(() => setSaveToast(null), 4000);
+    }
   };
 
   const handleBookVisit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!visitDate) {
-      alert("Please select a preferred date for the site inspection.");
+      setSaveToast("Please select a preferred date for the site inspection.");
+      setTimeout(() => setSaveToast(null), 3000);
       return;
     }
-    setIsVisitBooked(true);
+
+    if (!isAuthenticated) {
+      const allowed = requireAuth({
+        title: "Sign in to schedule inspection",
+        message: "Sign in to confirm VIP commercial asset inspections.",
+        onAuthenticated: () => executeBookCommercialVisit(),
+      });
+      if (allowed) {
+        executeBookCommercialVisit();
+      }
+      return;
+    }
+
+    executeBookCommercialVisit();
   };
 
-  // Similar Commercial Properties
-  const similarCommercial = MOCK_COMMERCIAL_PROPERTIES.filter(
-    (p) => p.id !== property.id && p.city === property.city
-  ).slice(0, 3);
+  if (isLoading) {
+    return (
+      <div className="py-12 bg-bg-light min-h-screen">
+        <Container>
+          <div className="animate-pulse space-y-6 max-w-5xl mx-auto">
+            <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+            <div className="h-96 bg-slate-200 rounded-2xl w-full"></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 h-64 bg-slate-200 rounded-xl"></div>
+              <div className="h-64 bg-slate-200 rounded-xl"></div>
+            </div>
+          </div>
+        </Container>
+      </div>
+    );
+  }
+
+  if (!property) {
+    return (
+      <div className="py-24 bg-bg-light min-h-[60vh] flex items-center justify-center text-center">
+        <Container>
+          <div className="max-w-md mx-auto p-8 bg-white rounded-2xl border border-border-default shadow-soft-sm space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold text-primary-navy">Commercial Listing Unavailable</h2>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              This commercial asset is currently under review, unpublished, or has been archived.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Link href="/commercial">
+                <Button variant="primary" size="sm" className="text-xs font-bold">
+                  Browse Commercial Marketplace
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </div>
+    );
+  }
 
   return (
     <div className="py-8 bg-bg-light min-h-screen font-sans text-text-primary">

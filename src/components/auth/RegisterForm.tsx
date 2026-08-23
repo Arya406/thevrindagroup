@@ -29,7 +29,7 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [role, setRole] = useState<UserRole>("OWNER");
+  const [role, setRole] = useState<UserRole>("BUYER");
   const [lookingFor, setLookingFor] = useState<"buy" | "rent" | "both">("both");
   const [agencyName, setAgencyName] = useState("");
   const [agencyWebsite, setAgencyWebsite] = useState("");
@@ -211,15 +211,28 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
           </div>
         </div>
 
-        {/* Role Persona: Owner vs Agent */}
+        {/* Role Persona: Buyer vs Owner vs Agent */}
         <div className="space-y-1.5 pt-1">
           <label className="text-xs font-semibold text-text-secondary block">
             I am registering as:
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {[
-              { id: "OWNER" as UserRole, label: "Property Owner / Individual", desc: "List personal properties" },
-              { id: "AGENT" as UserRole, label: "Real Estate Agent / Broker", desc: "Channel partner & agency" },
+              {
+                id: "BUYER" as UserRole,
+                label: "Buyer / Property Seeker",
+                desc: "Looking to buy, rent, or explore properties",
+              },
+              {
+                id: "OWNER" as UserRole,
+                label: "Property Owner / Seller",
+                desc: "List, sell, or rent out your properties",
+              },
+              {
+                id: "AGENT" as UserRole,
+                label: "Real Estate Agent / Broker",
+                desc: "Channel partner, agency, or certified broker",
+              },
             ].map((r) => (
               <button
                 key={r.id}

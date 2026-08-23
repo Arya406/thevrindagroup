@@ -24,6 +24,7 @@ export type CommercialType =
 
 export interface UploadedPhoto {
   id: string;
+  file?: File;
   url: string;
   name: string;
   isCover: boolean;

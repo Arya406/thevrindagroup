@@ -2,20 +2,39 @@
 
 import React from "react";
 import Link from "next/link";
-import { CheckCircle2, ArrowRight, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { CheckCircle2, ArrowRight, RotateCcw, ShieldCheck, Sparkles, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui";
 import { PropertyListingDraft } from "@/types/postProperty";
 
 export interface PublishSuccessProps {
   draft: PropertyListingDraft;
+  createdPropertyId?: string;
+  createdPropertySlug?: string;
+  createdReferenceCode?: string;
+  isLivePublished?: boolean;
   onPostAnother: () => void;
 }
 
-export function PublishSuccess({ draft, onPostAnother }: PublishSuccessProps) {
+export function PublishSuccess({
+  draft,
+  createdPropertyId,
+  createdPropertySlug,
+  createdReferenceCode,
+  isLivePublished = false,
+  onPostAnother,
+}: PublishSuccessProps) {
   const isResidential = draft.category === "residential";
   const propertyTitle = isResidential
     ? `${draft.residentialDetails.bhk} BHK ${draft.residentialType} in ${draft.location.locality || "Bangalore"}`
     : `Commercial ${draft.commercialType} in ${draft.location.locality || "Bangalore"}`;
+
+  const targetLink = createdPropertyId || createdPropertySlug
+    ? `/property/${createdPropertySlug || createdPropertyId}`
+    : draft.category === "commercial"
+    ? "/commercial"
+    : draft.transaction === "rent"
+    ? "/rent"
+    : "/buy";
 
   return (
     <div className="max-w-2xl mx-auto rounded-2xl bg-white border border-border-default p-6 sm:p-10 shadow-soft-lg text-center space-y-6 animate-in zoom-in-95 duration-300">
@@ -28,22 +47,24 @@ export function PublishSuccess({ draft, onPostAnother }: PublishSuccessProps) {
       <div className="space-y-1.5">
         <div className="inline-flex items-center gap-1 text-[11px] font-bold text-success-green bg-success-green-light px-2.5 py-0.5 rounded-full border border-success-green-border">
           <Sparkles className="w-3 h-3" />
-          Submission Completed Successfully
+          {isLivePublished ? "Property Published Live on Marketplace" : "Property Created & Saved to PostgreSQL"}
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-primary-navy tracking-tight">
-          Your Property Has Been Submitted
+          {isLivePublished ? "Your Property is Now Live!" : "Your Property Has Been Created"}
         </h1>
         <p className="text-xs sm:text-sm text-text-secondary max-w-md mx-auto">
-          Your listing has been formatted and queued for marketplace review.
+          {isLivePublished
+            ? "Your verified property listing is published and immediately discoverable across TheVrindaGroup marketplace."
+            : "Your listing draft is recorded in the database. You can manage or publish it anytime from your dashboard."}
         </p>
       </div>
 
       {/* Submission Receipt Card */}
       <div className="p-4 sm:p-5 rounded-xl bg-bg-light border border-border-subtle text-left text-xs space-y-2.5">
         <div className="flex items-center justify-between border-b border-border-default pb-2">
-          <span className="text-text-muted">Generated Property ID</span>
+          <span className="text-text-muted">Reference Code</span>
           <strong className="text-primary-navy font-mono text-sm font-bold bg-white px-2 py-0.5 rounded border border-border-subtle">
-            {draft.id || "PP-2026-8812"}
+            {createdReferenceCode || draft.id}
           </strong>
         </div>
 
@@ -76,11 +97,12 @@ export function PublishSuccess({ draft, onPostAnother }: PublishSuccessProps) {
           </div>
         </div>
 
-        {/* Demo State Disclaimer */}
+        {/* Database Verification Status */}
         <div className="pt-2 border-t border-border-subtle/80 flex items-start gap-2 text-[11px] text-text-secondary">
           <ShieldCheck className="w-3.5 h-3.5 text-accent-gold shrink-0 mt-0.5" />
           <span>
-            <strong>Frontend Simulation:</strong> This property listing is stored in your client session and ready for backend API connection.
+            <strong>Verified Database Record:</strong> Stored securely in PostgreSQL with reference code{" "}
+            <span className="font-mono font-bold text-primary-navy">{createdReferenceCode || draft.id}</span>.
           </span>
         </div>
       </div>
@@ -95,13 +117,13 @@ export function PublishSuccess({ draft, onPostAnother }: PublishSuccessProps) {
         >
           Post Another Property
         </Button>
-        <Link href={draft.category === "commercial" ? "/commercial" : draft.transaction === "rent" ? "/rent" : "/buy"} className="w-full sm:w-1/2">
+        <Link href={targetLink} className="w-full sm:w-1/2">
           <Button
             variant="primary"
-            rightIcon={<ArrowRight className="w-4 h-4" />}
+            rightIcon={createdPropertyId ? <ExternalLink className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
             className="w-full text-xs font-bold shadow-soft"
           >
-            Explore Marketplace
+            {createdPropertyId ? "View Property Details" : "Explore Marketplace"}
           </Button>
         </Link>
       </div>

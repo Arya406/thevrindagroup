@@ -1,27 +1,36 @@
-export type UserRole = "BUYER" | "OWNER" | "AGENT";
+// ==============================================================================
+// TheVrindaGroup - Frontend Authentication Data Types
+// ==============================================================================
+
+export type UserRole = "BUYER" | "OWNER" | "AGENT" | "ADMIN";
 
 export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone: string | null;
   role: UserRole;
+  isActive?: boolean;
+  avatarUrl?: string | null;
+  avatar?: string;
   agencyName?: string;
   agencyWebsite?: string;
-  avatar?: string;
   lookingFor?: "buy" | "rent" | "both";
   intent?: "list" | "find";
-  createdAt: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  lastLoginAt?: string | Date | null;
 }
 
 export interface AuthSession {
   user: AuthUser;
-  token: string;
-  expiresAt: number;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: number;
 }
 
 export interface LoginCredentials {
-  identifier: string; // Email or Phone
+  identifier: string; // Email
   password: string;
   rememberMe?: boolean;
 }
@@ -29,7 +38,7 @@ export interface LoginCredentials {
 export interface RegisterData {
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   password: string;
   role: UserRole;
   agencyName?: string;
@@ -47,7 +56,7 @@ export interface AuthResponse {
 }
 
 export interface ResetPasswordRequest {
-  identifier: string; // Email or Phone
+  identifier: string;
 }
 
 export interface VerifyOtpRequest {

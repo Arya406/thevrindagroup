@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,8 +9,10 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
-import { Container } from "@/components/ui";
+import { Container, Button } from "@/components/ui";
 import { CommercialDiscovery } from "@/components/commercial/CommercialDiscovery";
 import { CommercialSearchBar } from "@/components/commercial/CommercialSearchBar";
 import { CommercialFiltersView } from "@/components/commercial/CommercialFilters";
@@ -23,9 +25,8 @@ import { CommercialProjectsSection } from "@/components/commercial/CommercialPro
 import { SortDropdown, SortOption } from "@/components/marketplace/SortDropdown";
 import { EmptyResults } from "@/components/marketplace/EmptyResults";
 import { PropertySkeleton } from "@/components/marketplace/PropertySkeleton";
-import { MOCK_COMMERCIAL_PROPERTIES } from "@/data/mockCommercial";
-import { MOCK_PROPERTIES } from "@/data/mockProperties";
-import { CommercialFilters } from "@/types/commercial";
+import { CommercialFilters, CommercialProperty } from "@/types/commercial";
+import { PropertyApiService, mapPropertyToCommercialProperty } from "@/lib/services/property-api";
 
 const INITIAL_COMMERCIAL_FILTERS: CommercialFilters = {
   city: "All",
@@ -79,7 +80,13 @@ function CommercialPageContent() {
   const [sortOption, setSortOption] = useState<SortOption>(sortParam);
   const [currentPage, setCurrentPage] = useState(1);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Live Backend State
+  const [commercialProperties, setCommercialProperties] = useState<CommercialProperty[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Sync to URL
   const syncToUrl = useCallback(
@@ -129,6 +136,129 @@ function CommercialPageContent() {
     [searchParams, pathname, router]
   );
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const effectiveTransaction =
+      filters.transactionType !== "all" ? filters.transactionType : transactionType;
+    let listingTypeParam: "SALE" | "RENT" | "LEASE" | undefined = undefined;
+    if (effectiveTransaction === "sale") listingTypeParam = "SALE";
+    else if (effectiveTransaction === "lease" || effectiveTransaction === "rent")
+      listingTypeParam = "LEASE";
+
+    const effectivePropertyType =
+      filters.propertyTypes.length > 0 ? filters.propertyTypes[0] : propertyType;
+    const effectiveBudget =
+      filters.priceRange !== "any" ? filters.priceRange : priceBudget;
+    const effectiveArea =
+      filters.areaRange !== "any" ? filters.areaRange : areaRange;
+
+    PropertyApiService.getProperties({
+      listingType: listingTypeParam,
+      propertyType: effectivePropertyType !== "all" ? effectivePropertyType : undefined,
+      city: filters.city !== "All" ? filters.city : undefined,
+      search: locationQuery.trim() || undefined,
+      budget: effectiveBudget !== "any" ? effectiveBudget : undefined,
+      areaRange: effectiveArea !== "any" ? effectiveArea : undefined,
+      sort:
+        sortOption === "price-asc"
+          ? "PRICE_LOW_TO_HIGH"
+          : sortOption === "price-desc"
+          ? "PRICE_HIGH_TO_LOW"
+          : "NEWEST",
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+    })
+      .then((res) => {
+        if (isMounted) {
+          const mapped = (res.properties || []).map(mapPropertyToCommercialProperty);
+          setCommercialProperties(mapped);
+          setTotalCount(res.pagination.total);
+          setTotalPages(res.pagination.totalPages);
+          setFetchError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (isMounted) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : "Failed to load commercial properties from server.";
+          setFetchError(msg);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    locationQuery,
+    propertyType,
+    transactionType,
+    areaRange,
+    priceBudget,
+    filters,
+    sortOption,
+    currentPage,
+  ]);
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setFetchError(null);
+
+    const effectiveTransaction =
+      filters.transactionType !== "all" ? filters.transactionType : transactionType;
+    let listingTypeParam: "SALE" | "RENT" | "LEASE" | undefined = undefined;
+    if (effectiveTransaction === "sale") listingTypeParam = "SALE";
+    else if (effectiveTransaction === "lease" || effectiveTransaction === "rent")
+      listingTypeParam = "LEASE";
+
+    const effectivePropertyType =
+      filters.propertyTypes.length > 0 ? filters.propertyTypes[0] : propertyType;
+    const effectiveBudget =
+      filters.priceRange !== "any" ? filters.priceRange : priceBudget;
+    const effectiveArea =
+      filters.areaRange !== "any" ? filters.areaRange : areaRange;
+
+    PropertyApiService.getProperties({
+      listingType: listingTypeParam,
+      propertyType: effectivePropertyType !== "all" ? effectivePropertyType : undefined,
+      city: filters.city !== "All" ? filters.city : undefined,
+      search: locationQuery.trim() || undefined,
+      budget: effectiveBudget !== "any" ? effectiveBudget : undefined,
+      areaRange: effectiveArea !== "any" ? effectiveArea : undefined,
+      sort:
+        sortOption === "price-asc"
+          ? "PRICE_LOW_TO_HIGH"
+          : sortOption === "price-desc"
+          ? "PRICE_HIGH_TO_LOW"
+          : "NEWEST",
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+    })
+      .then((res) => {
+        const mapped = (res.properties || []).map(mapPropertyToCommercialProperty);
+        setCommercialProperties(mapped);
+        setTotalCount(res.pagination.total);
+        setTotalPages(res.pagination.totalPages);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Failed to load commercial properties from server.";
+        setFetchError(msg);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
+
   const handleSelectType = (selectedType: string) => {
     setPropertyType(selectedType);
     setFilters((prev) => ({ ...prev, propertyTypes: [selectedType] }));
@@ -139,113 +269,11 @@ function CommercialPageContent() {
 
   const handleSelectLocation = (loc: string) => {
     setLocationQuery(loc);
-    setFilters((prev) => ({ ...prev, locality: loc }));
+    setFilters((prev) => ({ ...prev, city: loc }));
     syncToUrl({ city: loc });
     const resultsElement = document.getElementById("commercial-results");
     if (resultsElement) resultsElement.scrollIntoView({ behavior: "smooth" });
   };
-
-  // Filter & Sort Logic
-  const filteredCommercial = useMemo(() => {
-    return MOCK_COMMERCIAL_PROPERTIES.filter((p) => {
-      // 1. Location
-      if (locationQuery) {
-        const query = locationQuery.toLowerCase();
-        const matchesLoc =
-          p.city.toLowerCase().includes(query) ||
-          p.locality.toLowerCase().includes(query) ||
-          p.businessDistrict.toLowerCase().includes(query) ||
-          p.location.toLowerCase().includes(query) ||
-          p.title.toLowerCase().includes(query);
-        if (!matchesLoc) return false;
-      }
-
-      // 2. Transaction Type
-      const activeTxn =
-        filters.transactionType !== "all"
-          ? filters.transactionType
-          : transactionType;
-      if (activeTxn !== "all" && p.transactionType !== activeTxn) {
-        return false;
-      }
-
-      // 3. Property Type
-      if (propertyType !== "all" && p.propertyType !== propertyType) return false;
-      if (
-        filters.propertyTypes.length > 0 &&
-        !filters.propertyTypes.includes(p.propertyType)
-      ) {
-        return false;
-      }
-
-      // 4. Area Range
-      const effectiveArea =
-        filters.areaRange !== "any" ? filters.areaRange : areaRange;
-      if (effectiveArea === "under-1000" && p.areaNumeric > 1000) return false;
-      if (
-        effectiveArea === "1000-3000" &&
-        (p.areaNumeric < 1000 || p.areaNumeric > 3000)
-      )
-        return false;
-      if (
-        effectiveArea === "3000-7000" &&
-        (p.areaNumeric < 3000 || p.areaNumeric > 7000)
-      )
-        return false;
-      if (
-        effectiveArea === "7000-15000" &&
-        (p.areaNumeric < 7000 || p.areaNumeric > 15000)
-      )
-        return false;
-      if (effectiveArea === "above-15000" && p.areaNumeric < 15000)
-        return false;
-
-      // 5. Furnishing
-      if (
-        filters.furnishingList.length > 0 &&
-        !filters.furnishingList.includes(p.furnishingStatus)
-      ) {
-        return false;
-      }
-
-      // 6. Possession Status
-      if (
-        filters.possessionStatus.length > 0 &&
-        !filters.possessionStatus.includes(p.possessionStatus)
-      ) {
-        return false;
-      }
-
-      // 7. RERA Only
-      if (filters.isReraOnly && !p.isReraVerified) return false;
-
-      // 8. Amenities
-      if (filters.amenities.length > 0) {
-        const hasAll = filters.amenities.every((a) => p.amenities.includes(a));
-        if (!hasAll) return false;
-      }
-
-      return true;
-    }).sort((a, b) => {
-      if (sortOption === "newest") {
-        return b.id.localeCompare(a.id);
-      }
-      if (sortOption === "price-asc") {
-        return a.priceNumeric - b.priceNumeric;
-      }
-      if (sortOption === "price-desc") {
-        return b.priceNumeric - a.priceNumeric;
-      }
-      return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
-    });
-  }, [
-    locationQuery,
-    propertyType,
-    transactionType,
-    areaRange,
-    filters,
-    sortOption,
-  ]);
 
   // Construct Active Filter Chips
   const activeFilterList: ActiveFilterItem[] = useMemo(() => {
@@ -265,82 +293,55 @@ function CommercialPageContent() {
 
     if (transactionType !== "all") {
       list.push({
-        id: "txn",
-        label: `Transaction: ${transactionType.toUpperCase()}`,
+        id: "trx-bar",
+        label: `Type: ${transactionType.toUpperCase()}`,
         category: "transaction",
         onRemove: () => {
           setTransactionType("all");
-          setFilters((p) => ({ ...p, transactionType: "all" }));
           syncToUrl({ transaction: "all" });
         },
       });
     }
 
-    if (propertyType !== "all") {
-      list.push({
-        id: "pt",
-        label: `Type: ${propertyType}`,
-        category: "propertyType",
-        onRemove: () => {
-          setPropertyType("all");
-          setFilters((p) => ({ ...p, propertyTypes: [] }));
-          syncToUrl({ propertyType: "all" });
-        },
-      });
-    }
-
     filters.propertyTypes.forEach((pt) => {
-      if (!list.find((x) => x.id === `pt-${pt}`)) {
-        list.push({
-          id: `pt-${pt}`,
-          label: pt,
-          category: "propertyType",
-          onRemove: () =>
-            setFilters((p) => ({
-              ...p,
-              propertyTypes: p.propertyTypes.filter((x) => x !== pt),
-            })),
-        });
-      }
+      list.push({
+        id: `pt-${pt}`,
+        label: pt.toUpperCase(),
+        category: "propertyType",
+        onRemove: () =>
+          setFilters((prev) => ({
+            ...prev,
+            propertyTypes: prev.propertyTypes.filter((x) => x !== pt),
+          })),
+      });
     });
 
-    if (areaRange !== "any") {
+    if (filters.areaRange !== "any") {
       list.push({
-        id: "area",
-        label: `Area: ${areaRange}`,
+        id: "area-range",
+        label: `Area: ${filters.areaRange}`,
         category: "area",
         onRemove: () => {
-          setAreaRange("any");
-          setFilters((p) => ({ ...p, areaRange: "any" }));
+          setFilters((prev) => ({ ...prev, areaRange: "any" }));
           syncToUrl({ areaRange: "any" });
         },
       });
     }
 
-    if (filters.isReraOnly) {
+    if (filters.priceRange !== "any") {
       list.push({
-        id: "rera",
-        label: "RERA Verified Only",
-        category: "verification",
-        onRemove: () => setFilters((p) => ({ ...p, isReraOnly: false })),
+        id: "price-range",
+        label: `Budget: ${filters.priceRange}`,
+        category: "price",
+        onRemove: () => {
+          setFilters((prev) => ({ ...prev, priceRange: "any" }));
+          syncToUrl({ priceBudget: "any" });
+        },
       });
     }
 
-    filters.furnishingList.forEach((fn) => {
-      list.push({
-        id: `furn-${fn}`,
-        label: fn,
-        category: "furnishing",
-        onRemove: () =>
-          setFilters((p) => ({
-            ...p,
-            furnishingList: p.furnishingList.filter((x) => x !== fn),
-          })),
-      });
-    });
-
     return list;
-  }, [locationQuery, transactionType, propertyType, areaRange, filters, syncToUrl]);
+  }, [locationQuery, transactionType, filters, syncToUrl]);
 
   const handleClearAll = () => {
     setLocationQuery("");
@@ -354,7 +355,6 @@ function CommercialPageContent() {
   };
 
   const handleSearchSubmit = () => {
-    setIsLoading(true);
     setCurrentPage(1);
     syncToUrl({
       city: locationQuery,
@@ -363,19 +363,12 @@ function CommercialPageContent() {
       areaRange,
       priceBudget,
     });
-    setTimeout(() => setIsLoading(false), 200);
   };
-
-  const totalPages = Math.ceil(filteredCommercial.length / ITEMS_PER_PAGE) || 1;
-  const paginatedCommercial = filteredCommercial.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   return (
     <div className="py-6 sm:py-8 bg-bg-light min-h-screen font-sans text-text-primary">
       <Container className="space-y-8">
-        {/* Breadcrumb Navigation */}
+        {/* Breadcrumbs */}
         <nav
           className="flex items-center gap-2 text-xs text-text-secondary"
           aria-label="Breadcrumb"
@@ -385,7 +378,7 @@ function CommercialPageContent() {
           </Link>
           <span>/</span>
           <span className="font-semibold text-primary-navy">
-            Commercial Properties & Office Spaces
+            Commercial Real Estate in India
           </span>
           {locationQuery && (
             <>
@@ -395,7 +388,7 @@ function CommercialPageContent() {
           )}
         </nav>
 
-        {/* 1. Commercial Asset Class Discovery & Business Hubs */}
+        {/* 1. Top Commercial Discovery & Highlights Section */}
         <CommercialDiscovery
           onSelectType={handleSelectType}
           onSelectLocation={handleSelectLocation}
@@ -431,6 +424,25 @@ function CommercialPageContent() {
             onSearchSubmit={handleSearchSubmit}
           />
         </div>
+
+        {/* Error Banner */}
+        {fetchError && (
+          <div className="rounded-xl bg-error-red-light/80 border border-error-red/30 p-4 text-xs text-error-red flex items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{fetchError}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+              className="text-xs h-8"
+            >
+              Retry
+            </Button>
+          </div>
+        )}
 
         {/* 3. Main Content: Commercial Filter Sidebar + Listings Results */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -474,7 +486,7 @@ function CommercialPageContent() {
                 </h1>
                 <p className="text-xs text-text-secondary">
                   <strong className="text-primary-navy font-bold">
-                    {filteredCommercial.length}
+                    {totalCount}
                   </strong>{" "}
                   commercial spaces verified with enterprise compliance
                 </p>
@@ -525,18 +537,18 @@ function CommercialPageContent() {
             {/* Active Filters Chips */}
             <ActiveFilters
               filters={activeFilterList}
-              totalCount={filteredCommercial.length}
+              totalCount={totalCount}
               onClearAll={handleClearAll}
             />
 
             {/* Results Grid / List */}
             {isLoading ? (
               <PropertySkeleton viewMode={viewMode} count={ITEMS_PER_PAGE} />
-            ) : filteredCommercial.length > 0 ? (
+            ) : commercialProperties.length > 0 ? (
               <>
                 {viewMode === "grid" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
-                    {paginatedCommercial.map((property) => (
+                    {commercialProperties.map((property) => (
                       <CommercialPropertyCard
                         key={property.id}
                         property={property}
@@ -545,7 +557,7 @@ function CommercialPageContent() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {paginatedCommercial.map((property) => (
+                    {commercialProperties.map((property) => (
                       <CommercialPropertyListCard
                         key={property.id}
                         property={property}
@@ -561,9 +573,9 @@ function CommercialPageContent() {
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
                       {Math.min(
                         currentPage * ITEMS_PER_PAGE,
-                        filteredCommercial.length
+                        totalCount
                       )}{" "}
-                      of {filteredCommercial.length} Properties
+                      of {totalCount} Properties
                     </p>
 
                     <div className="flex items-center gap-1.5">
@@ -583,10 +595,10 @@ function CommercialPageContent() {
                             key={page}
                             type="button"
                             onClick={() => setCurrentPage(page)}
-                            className={`w-8 h-8 rounded-lg font-bold transition-all cursor-pointer ${
+                            className={`w-8 h-8 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
                               currentPage === page
-                                ? "bg-primary-navy text-white shadow-soft-xs"
-                                : "bg-white text-text-primary border border-border-default hover:bg-bg-light"
+                                ? "bg-primary-navy text-white"
+                                : "border border-border-default bg-white text-text-primary hover:bg-bg-light"
                             }`}
                           >
                             {page}
@@ -610,40 +622,45 @@ function CommercialPageContent() {
                 )}
               </>
             ) : (
-              <EmptyResults
-                onClearFilters={handleClearAll}
-                recommendedProperties={MOCK_PROPERTIES.slice(0, 3)}
-              />
+              <EmptyResults onClearFilters={handleClearAll} />
             )}
           </div>
         </div>
 
-        {/* 4. Flexible Co-working & Enterprise Workspaces Section */}
+        {/* 4. Coworking Highlights Section */}
         <CoworkingSection />
 
-        {/* 5. Featured Master-Planned Commercial Campuses */}
+        {/* 5. Commercial Projects & IT Parks */}
         <CommercialProjectsSection />
-
-        {/* Mobile Filter Drawer */}
-        <MobileCommercialFilterModal
-          isOpen={isMobileFiltersOpen}
-          onClose={() => setIsMobileFiltersOpen(false)}
-          filters={filters}
-          onFilterChange={(f) => {
-            setFilters(f);
-            setCurrentPage(1);
-          }}
-          onClearAll={handleClearAll}
-          matchingCount={filteredCommercial.length}
-        />
       </Container>
+
+      {/* Mobile Filters Modal */}
+      <MobileCommercialFilterModal
+        isOpen={isMobileFiltersOpen}
+        onClose={() => setIsMobileFiltersOpen(false)}
+        filters={filters}
+        onFilterChange={(f) => {
+          setFilters(f);
+          setCurrentPage(1);
+        }}
+        onClearAll={handleClearAll}
+        matchingCount={totalCount}
+      />
     </div>
   );
 }
 
 export default function CommercialPage() {
   return (
-    <Suspense fallback={<PropertySkeleton count={6} />}>
+    <Suspense
+      fallback={
+        <div className="py-12 bg-bg-light min-h-screen">
+          <Container>
+            <PropertySkeleton viewMode="grid" count={6} />
+          </Container>
+        </div>
+      }
+    >
       <CommercialPageContent />
     </Suspense>
   );

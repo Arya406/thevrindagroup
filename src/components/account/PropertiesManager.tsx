@@ -1,16 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
   Building2,
   PlusCircle,
   Search,
-  Eye,
-  Users,
-  Heart,
-  CalendarCheck,
   MoreVertical,
   Edit3,
   ExternalLink,
@@ -20,33 +16,238 @@ import {
   Trash2,
   AlertTriangle,
   MapPin,
-  X,
+  RefreshCw,
+  AlertCircle,
+  Archive,
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { ManagedProperty, PropertyStatus } from "@/types/account";
-import { MOCK_MANAGED_PROPERTIES } from "@/data/account/mockAccountData";
 import { EmptyState } from "./EmptyState";
+import { useAuth } from "@/lib/auth/auth-context";
+import { PropertyApiService } from "@/lib/services/property-api";
+import { Property } from "@/types/property";
 
 type TabType = "ALL" | "ACTIVE" | "PENDING" | "DRAFT" | "REJECTED" | "EXPIRED" | "CLOSED";
 
+function mapPropertyToManaged(p: Property): ManagedProperty {
+  let status: PropertyStatus = "DRAFT";
+  if (p.status === "PUBLISHED" || p.isApproved) {
+    status = "ACTIVE";
+  } else if (p.status === "SOLD") {
+    status = "SOLD";
+  } else if (p.status === "RENTED") {
+    status = "RENTED";
+  } else if (p.status === "ARCHIVED") {
+    status = "EXPIRED";
+  } else if (p.status === "DRAFT") {
+    status = "DRAFT";
+  }
+
+  const category =
+    p.propertyType === "commercial-office" || p.propertyType === "retail-shop"
+      ? "commercial"
+      : "residential";
+
+  const transactionType = p.listingType === "rent" ? "rent" : "sale";
+
+  return {
+    id: p.id,
+    title: p.title,
+    location: p.location || "Bangalore",
+    city: p.city || "Bangalore",
+    price: p.priceNumeric || 0,
+    formattedPrice: p.price || "₹0",
+    image:
+      p.image ||
+      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
+    status,
+    views: 0,
+    enquiries: 0,
+    saves: 0,
+    visits: 0,
+    postedAt: p.postedDate || "Recently",
+    propertyType: p.propertyType,
+    transactionType,
+    category,
+    bhk: p.bhk ? `${p.bhk} BHK` : undefined,
+    carpetArea: p.carpetArea || "1,200 sq.ft",
+  };
+}
+
 export function PropertiesManager() {
-  const [properties, setProperties] = useState<ManagedProperty[]>(MOCK_MANAGED_PROPERTIES);
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const [properties, setProperties] = useState<ManagedProperty[]>([]);
   const [currentTab, setCurrentTab] = useState<TabType>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Modals state
+  // Modals & Action State
   const [deleteModalProp, setDeleteModalProp] = useState<ManagedProperty | null>(null);
   const [statusActionToast, setStatusActionToast] = useState<string | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isAuthenticated) {
+      PropertyApiService.getMyProperties({ limit: 50 })
+        .then((res) => {
+          if (isMounted && res.properties) {
+            setProperties(res.properties.map(mapPropertyToManaged));
+          }
+        })
+        .catch((err: unknown) => {
+          if (isMounted) {
+            const msg =
+              err instanceof Error ? err.message : "Failed to load your property listings.";
+            setFetchError(msg);
+          }
+        })
+        .finally(() => {
+          if (isMounted) {
+            setIsLoading(false);
+          }
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated]);
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setFetchError(null);
+    PropertyApiService.getMyProperties({ limit: 50 })
+      .then((res) => {
+        if (res.properties) {
+          setProperties(res.properties.map(mapPropertyToManaged));
+        }
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof Error ? err.message : "Failed to load your property listings.";
+        setFetchError(msg);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
 
   const showToast = (msg: string) => {
     setStatusActionToast(msg);
-    setTimeout(() => setStatusActionToast(null), 3000);
+    setTimeout(() => setStatusActionToast(null), 3500);
+  };
+
+  // Status Lifecycle Actions
+  const handleTogglePublish = async (prop: ManagedProperty) => {
+    if (isActionLoading) return;
+    setIsActionLoading(true);
+    setActiveMenuId(null);
+
+    try {
+      if (prop.status === "ACTIVE") {
+        await PropertyApiService.unpublishProperty(prop.id);
+        setProperties((prev) =>
+          prev.map((p) =>
+            p.id === prop.id ? { ...p, status: "DRAFT" } : p
+          )
+        );
+        showToast("Listing unpublished and moved to Drafts.");
+      } else {
+        await PropertyApiService.publishProperty(prop.id);
+        setProperties((prev) =>
+          prev.map((p) =>
+            p.id === prop.id ? { ...p, status: "ACTIVE" } : p
+          )
+        );
+        showToast("Listing published to marketplace successfully!");
+      }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Unable to update listing status.";
+      showToast(msg);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleMarkSold = async (prop: ManagedProperty) => {
+    if (isActionLoading) return;
+    setIsActionLoading(true);
+    setActiveMenuId(null);
+
+    try {
+      await PropertyApiService.markSoldProperty(prop.id);
+      setProperties((prev) =>
+        prev.map((p) => (p.id === prop.id ? { ...p, status: "SOLD" } : p))
+      );
+      showToast("Property marked as Sold.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unable to mark as sold.";
+      showToast(msg);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleMarkRented = async (prop: ManagedProperty) => {
+    if (isActionLoading) return;
+    setIsActionLoading(true);
+    setActiveMenuId(null);
+
+    try {
+      await PropertyApiService.markRentedProperty(prop.id);
+      setProperties((prev) =>
+        prev.map((p) => (p.id === prop.id ? { ...p, status: "RENTED" } : p))
+      );
+      showToast("Property marked as Rented.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unable to mark as rented.";
+      showToast(msg);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleArchive = async (prop: ManagedProperty) => {
+    if (isActionLoading) return;
+    setIsActionLoading(true);
+    setActiveMenuId(null);
+
+    try {
+      await PropertyApiService.archiveProperty(prop.id);
+      setProperties((prev) =>
+        prev.map((p) => (p.id === prop.id ? { ...p, status: "EXPIRED" } : p))
+      );
+      showToast("Property listing archived.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unable to archive listing.";
+      showToast(msg);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteModalProp || isActionLoading) return;
+    setIsActionLoading(true);
+
+    try {
+      await PropertyApiService.deleteProperty(deleteModalProp.id);
+      setProperties((prev) => prev.filter((p) => p.id !== deleteModalProp.id));
+      showToast("Property listing deleted successfully.");
+      setDeleteModalProp(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unable to delete property.";
+      showToast(msg);
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   // Filter properties
   const filteredProperties = properties.filter((prop) => {
-    // Tab match
     if (currentTab === "ACTIVE" && prop.status !== "ACTIVE") return false;
     if (currentTab === "PENDING" && prop.status !== "PENDING") return false;
     if (currentTab === "DRAFT" && prop.status !== "DRAFT") return false;
@@ -54,7 +255,6 @@ export function PropertiesManager() {
     if (currentTab === "EXPIRED" && prop.status !== "EXPIRED") return false;
     if (currentTab === "CLOSED" && prop.status !== "SOLD" && prop.status !== "RENTED") return false;
 
-    // Search query match
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
@@ -97,7 +297,7 @@ export function PropertiesManager() {
       case "EXPIRED":
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-            EXPIRED
+            ARCHIVED
           </span>
         );
       case "SOLD":
@@ -117,43 +317,15 @@ export function PropertiesManager() {
     }
   };
 
-  // Actions
-  const handleTogglePause = (id: string) => {
-    setProperties((prev) =>
-      prev.map((p) => {
-        if (p.id === id) {
-          const nextStatus = p.status === "ACTIVE" ? "DRAFT" : "ACTIVE";
-          showToast(`Listing ${nextStatus === "ACTIVE" ? "activated" : "paused"} successfully.`);
-          return { ...p, status: nextStatus };
-        }
-        return p;
-      })
-    );
-    setActiveMenuId(null);
-  };
-
-  const handleMarkSoldRented = (id: string, type: "SOLD" | "RENTED") => {
-    setProperties((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: type } : p))
-    );
-    showToast(`Property marked as ${type}.`);
-    setActiveMenuId(null);
-  };
-
-  const handleDeleteConfirm = () => {
-    if (!deleteModalProp) return;
-    setProperties((prev) => prev.filter((p) => p.id !== deleteModalProp.id));
-    showToast("Property listing deleted.");
-    setDeleteModalProp(null);
-  };
-
   const tabs = [
     { id: "ALL" as TabType, label: "All Properties", count: properties.length },
     { id: "ACTIVE" as TabType, label: "Active", count: properties.filter((p) => p.status === "ACTIVE").length },
-    { id: "PENDING" as TabType, label: "Pending", count: properties.filter((p) => p.status === "PENDING").length },
     { id: "DRAFT" as TabType, label: "Drafts", count: properties.filter((p) => p.status === "DRAFT").length },
     { id: "CLOSED" as TabType, label: "Sold / Rented", count: properties.filter((p) => p.status === "SOLD" || p.status === "RENTED").length },
+    { id: "EXPIRED" as TabType, label: "Archived", count: properties.filter((p) => p.status === "EXPIRED").length },
   ];
+
+  const showLoading = isAuthLoading || (isAuthenticated && isLoading);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -172,7 +344,7 @@ export function PropertiesManager() {
             My Properties
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
-            Manage your listings, edit descriptions, track visitor views, and monitor leads.
+            Manage your listings, edit specifications, publish drafts, and track property lifecycle states.
           </p>
         </div>
 
@@ -187,6 +359,25 @@ export function PropertiesManager() {
           </Button>
         </Link>
       </div>
+
+      {/* Error Banner */}
+      {fetchError && (
+        <div className="rounded-xl bg-error-red-light/80 border border-error-red/30 p-4 text-xs text-error-red flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{fetchError}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRetry}
+            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+            className="text-xs h-8"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
 
       {/* Tabs & Search Bar */}
       <div className="space-y-4">
@@ -233,8 +424,28 @@ export function PropertiesManager() {
         </div>
       </div>
 
-      {/* Property Cards List */}
-      {filteredProperties.length > 0 ? (
+      {/* Loading Skeleton */}
+      {showLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className="rounded-2xl border border-border-default bg-white p-4 sm:p-5 shadow-soft animate-pulse flex flex-col md:flex-row gap-4 justify-between"
+            >
+              <div className="flex gap-4">
+                <div className="w-24 h-24 rounded-xl bg-slate-200 shrink-0" />
+                <div className="space-y-2 py-1">
+                  <div className="h-4 bg-slate-200 rounded w-48" />
+                  <div className="h-3 bg-slate-200 rounded w-32" />
+                  <div className="h-4 bg-slate-200 rounded w-24" />
+                </div>
+              </div>
+              <div className="h-8 bg-slate-200 rounded-lg w-28 self-end" />
+            </div>
+          ))}
+        </div>
+      ) : filteredProperties.length > 0 ? (
+        /* Property Cards List */
         <div className="space-y-4">
           {filteredProperties.map((property) => {
             const publicUrl =
@@ -249,79 +460,56 @@ export function PropertiesManager() {
                 key={property.id}
                 className="rounded-2xl border border-border-default bg-white p-4 sm:p-5 shadow-soft hover:shadow-soft-md transition-all flex flex-col md:flex-row gap-4 md:items-center justify-between relative"
               >
-                {/* Left: Thumbnail & Details */}
-                <div className="flex gap-4 items-start sm:items-center min-w-0 flex-1">
-                  <div className="relative w-24 h-24 sm:w-28 sm:h-24 rounded-xl overflow-hidden shrink-0 border border-border-subtle bg-slate-100 shadow-soft-xs">
+                {/* Left: Thumbnail & Core Info */}
+                <div className="flex items-start sm:items-center gap-3.5">
+                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-border-subtle shrink-0">
                     <Image
                       src={property.image}
                       alt={property.title}
                       fill
-                      sizes="120px"
                       className="object-cover"
                     />
-                    <div className="absolute top-1.5 left-1.5">
-                      {getStatusBadge(property.status)}
-                    </div>
                   </div>
 
-                  <div className="space-y-1 min-w-0 flex-1">
+                  <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-bold text-primary-navy truncate">
+                      <h3 className="text-sm font-bold text-primary-navy line-clamp-1">
                         {property.title}
                       </h3>
+                      {getStatusBadge(property.status)}
                     </div>
 
-                    <p className="text-xs text-text-secondary flex items-center gap-1 truncate">
+                    <p className="text-xs text-text-secondary flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5 text-accent-gold shrink-0" />
-                      {property.location}
+                      <span>
+                        {property.location}, {property.city}
+                      </span>
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-2.5 pt-0.5 text-xs">
+                    <div className="flex items-center gap-3 pt-0.5">
                       <strong className="text-sm font-extrabold text-primary-navy">
                         {property.formattedPrice}
                       </strong>
-                      <span className="text-text-muted">•</span>
-                      <span className="text-[11px] text-text-secondary font-medium">
-                        {property.bhk ? `${property.bhk} • ` : ""}{property.carpetArea}
+                      <span className="text-[11px] text-text-muted capitalize">
+                        • {property.propertyType}
                       </span>
-                      <span className="text-text-muted">•</span>
-                      <span className="text-[10px] text-text-muted">
-                        Posted on {property.postedAt}
-                      </span>
-                    </div>
-
-                    {/* Performance Metric Counters */}
-                    <div className="flex items-center gap-4 pt-2 text-[11px] text-text-secondary border-t border-border-subtle/70">
-                      <span className="flex items-center gap-1 font-semibold text-primary-navy">
-                        <Eye className="w-3.5 h-3.5 text-text-muted" />
-                        {property.views} Views
-                      </span>
-                      <span className="flex items-center gap-1 font-semibold text-primary-navy">
-                        <Users className="w-3.5 h-3.5 text-text-muted" />
-                        {property.enquiries} Enquiries
-                      </span>
-                      <span className="flex items-center gap-1 font-semibold text-primary-navy">
-                        <Heart className="w-3.5 h-3.5 text-text-muted" />
-                        {property.saves} Saves
-                      </span>
-                      <span className="flex items-center gap-1 font-semibold text-primary-navy">
-                        <CalendarCheck className="w-3.5 h-3.5 text-text-muted" />
-                        {property.visits} Visits
+                      <span className="text-[11px] text-text-muted">
+                        • Posted {property.postedAt}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Management Buttons */}
-                <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-border-subtle justify-end">
-                  <Link href={publicUrl} target="_blank">
+                {/* Right: Actions */}
+                <div className="flex items-center justify-end gap-2 pt-3 md:pt-0 border-t md:border-t-0 border-border-subtle">
+                  <Link href={publicUrl}>
                     <Button
                       variant="outline"
                       size="sm"
                       leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
-                      className="text-xs font-semibold"
+                      className="text-xs h-8"
                     >
-                      View
+                      View Live
                     </Button>
                   </Link>
 
@@ -330,66 +518,96 @@ export function PropertiesManager() {
                       variant="outline"
                       size="sm"
                       leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-                      className="text-xs font-semibold"
+                      className="text-xs h-8"
                     >
                       Edit
                     </Button>
                   </Link>
 
-                  {/* More Dropdown Menu */}
+                  {/* Options Dropdown Menu */}
                   <div className="relative">
                     <button
                       type="button"
                       onClick={() => setActiveMenuId(isMenuOpen ? null : property.id)}
-                      className="p-2 rounded-lg border border-border-default hover:bg-bg-light text-text-secondary transition-colors cursor-pointer"
-                      title="More actions"
+                      className="p-1.5 rounded-lg border border-border-default hover:bg-bg-light text-text-secondary cursor-pointer transition-colors"
+                      aria-label="More options"
                     >
                       <MoreVertical className="w-4 h-4" />
                     </button>
 
                     {isMenuOpen && (
-                      <div className="absolute right-0 top-10 w-48 rounded-xl bg-white border border-border-default shadow-soft-lg z-30 p-1.5 space-y-1 animate-in fade-in duration-150">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePause(property.id)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-light rounded-lg transition-colors text-left cursor-pointer"
-                        >
-                          {property.status === "ACTIVE" ? (
-                            <>
-                              <PauseCircle className="w-3.5 h-3.5 text-[#9E6E18]" />
-                              Pause Listing
-                            </>
-                          ) : (
-                            <>
-                              <PlayCircle className="w-3.5 h-3.5 text-success-green" />
-                              Activate Listing
-                            </>
-                          )}
-                        </button>
+                      <div className="absolute right-0 top-10 w-48 rounded-xl bg-white border border-border-default shadow-soft-xl py-1.5 z-30 animate-in fade-in duration-150">
+                        {/* Publish / Unpublish Toggle */}
+                        {property.status === "ACTIVE" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePublish(property)}
+                            disabled={isActionLoading}
+                            className="w-full px-3.5 py-2 text-left text-xs font-semibold text-text-primary hover:bg-bg-light flex items-center gap-2 cursor-pointer"
+                          >
+                            <PauseCircle className="w-3.5 h-3.5 text-accent-gold" />
+                            Unpublish / Pause
+                          </button>
+                        ) : property.status === "DRAFT" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePublish(property)}
+                            disabled={isActionLoading}
+                            className="w-full px-3.5 py-2 text-left text-xs font-semibold text-text-primary hover:bg-bg-light flex items-center gap-2 cursor-pointer"
+                          >
+                            <PlayCircle className="w-3.5 h-3.5 text-success-green" />
+                            Publish Listing
+                          </button>
+                        ) : null}
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleMarkSoldRented(
-                              property.id,
-                              property.transactionType === "sale" ? "SOLD" : "RENTED"
-                            )
-                          }
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-light rounded-lg transition-colors text-left cursor-pointer"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5 text-primary-navy" />
-                          Mark as {property.transactionType === "sale" ? "Sold" : "Rented"}
-                        </button>
+                        {/* Sold / Rented Actions */}
+                        {property.status === "ACTIVE" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleMarkSold(property)}
+                              disabled={isActionLoading}
+                              className="w-full px-3.5 py-2 text-left text-xs font-semibold text-text-primary hover:bg-bg-light flex items-center gap-2 cursor-pointer"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 text-indigo-600" />
+                              Mark as Sold
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMarkRented(property)}
+                              disabled={isActionLoading}
+                              className="w-full px-3.5 py-2 text-left text-xs font-semibold text-text-primary hover:bg-bg-light flex items-center gap-2 cursor-pointer"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 text-teal-600" />
+                              Mark as Rented
+                            </button>
+                          </>
+                        )}
 
-                        <div className="border-t border-border-subtle my-1" />
+                        {/* Archive */}
+                        {(property.status === "ACTIVE" || property.status === "DRAFT") && (
+                          <button
+                            type="button"
+                            onClick={() => handleArchive(property)}
+                            disabled={isActionLoading}
+                            className="w-full px-3.5 py-2 text-left text-xs font-semibold text-text-primary hover:bg-bg-light flex items-center gap-2 cursor-pointer"
+                          >
+                            <Archive className="w-3.5 h-3.5 text-slate-500" />
+                            Archive Listing
+                          </button>
+                        )}
 
+                        <div className="h-px bg-border-subtle my-1" />
+
+                        {/* Delete Action */}
                         <button
                           type="button"
                           onClick={() => {
                             setDeleteModalProp(property);
                             setActiveMenuId(null);
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-error-red hover:bg-error-red-light rounded-lg transition-colors text-left cursor-pointer"
+                          disabled={isActionLoading}
+                          className="w-full px-3.5 py-2 text-left text-xs font-semibold text-error-red hover:bg-error-red-light flex items-center gap-2 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           Delete Property
@@ -405,13 +623,13 @@ export function PropertiesManager() {
       ) : (
         <EmptyState
           icon={Building2}
-          title="No properties found"
+          title={`No ${currentTab === "ALL" ? "" : currentTab.toLowerCase()} properties found`}
           description={
             searchQuery
-              ? "No listings match your search criteria. Try a different search keyword."
-              : "You do not have any listings under this status category."
+              ? "No property matches your search term. Try adjusting your search query."
+              : "You have not listed any properties in this category yet. Click below to create your listing."
           }
-          actionText="Post Property FREE"
+          actionText="Post a Property"
           actionHref="/post-property"
         />
       )}
@@ -420,34 +638,27 @@ export function PropertiesManager() {
       {deleteModalProp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-navy/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md rounded-2xl bg-white border border-border-default p-6 shadow-soft-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-error-red-light text-error-red flex items-center justify-center">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-error-red-light text-error-red flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <button
-                type="button"
-                onClick={() => setDeleteModalProp(null)}
-                className="p-1 rounded-lg text-text-muted hover:bg-bg-light cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div>
+                <h3 className="text-sm font-bold text-primary-navy">
+                  Delete Property Listing?
+                </h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Are you sure you want to permanently delete &ldquo;{deleteModalProp.title}&rdquo;? This action cannot be undone.
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <h3 className="text-base font-bold text-primary-navy">
-                Delete Property Listing?
-              </h3>
-              <p className="text-xs text-text-secondary leading-relaxed">
-                Are you sure you want to remove <strong className="text-text-primary">{deleteModalProp.title}</strong>? This action will remove the listing and its associated lead history.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border-subtle">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border-subtle">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setDeleteModalProp(null)}
-                className="text-xs font-semibold"
+                disabled={isActionLoading}
+                className="text-xs"
               >
                 Cancel
               </Button>
@@ -455,9 +666,10 @@ export function PropertiesManager() {
                 variant="primary"
                 size="sm"
                 onClick={handleDeleteConfirm}
-                className="bg-error-red hover:bg-error-red/90 text-white text-xs font-bold"
+                isLoading={isActionLoading}
+                className="text-xs bg-error-red hover:bg-error-red-hover text-white border-transparent"
               >
-                Confirm Delete
+                Yes, Delete
               </Button>
             </div>
           </div>

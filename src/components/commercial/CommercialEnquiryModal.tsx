@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, ShieldCheck, CheckCircle2, Send, Building2, Briefcase } from "lucide-react";
+import { X, ShieldCheck, CheckCircle2, Send, Building2, Briefcase, AlertCircle } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { CommercialProperty, CommercialEnquiry } from "@/types/commercial";
+import { useAuth } from "@/lib/auth/auth-context";
+import { EnquiryApiService, BackendPropertyEnquiry } from "@/lib/services/enquiry-api";
+import { ApiClientError } from "@/lib/api-client";
 
 export interface CommercialEnquiryModalProps {
   isOpen: boolean;
@@ -36,9 +39,11 @@ export function CommercialEnquiryModal({
   onClose,
   property,
 }: CommercialEnquiryModalProps) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const { currentUser, isAuthenticated, requireAuth } = useAuth();
+
+  const [name, setName] = useState(currentUser?.name || "");
+  const [phone, setPhone] = useState(currentUser?.phone || "");
+  const [email, setEmail] = useState(currentUser?.email || "");
   const [companyName, setCompanyName] = useState("");
   const [businessType, setBusinessType] = useState(BUSINESS_TYPES[0]);
   const [interestType, setInterestType] =
@@ -48,25 +53,80 @@ export function CommercialEnquiryModal({
   );
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdEnquiry, setCreatedEnquiry] = useState<BackendPropertyEnquiry | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !phone || !email || !companyName) {
-      alert("Please fill in your name, contact phone, business email, and company name.");
-      return;
-    }
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSubmitted(true);
-    }, 400);
-  };
-
   const handleReset = () => {
     setIsSubmitted(false);
+    setErrorMessage(null);
+    setCreatedEnquiry(null);
     onClose();
+  };
+
+  const executeSubmit = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const fullMessage = companyName
+        ? `[Company: ${companyName} | Industry: ${businessType} | Interest: ${interestType}] ${message}`
+        : message;
+
+      const enquiry = await EnquiryApiService.createEnquiry(property.id, {
+        message: fullMessage.trim() || undefined,
+      });
+
+      setCreatedEnquiry(enquiry);
+      setIsSubmitted(true);
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        if (err.statusCode === 400 && err.message.toLowerCase().includes("active enquiry")) {
+          setErrorMessage("You already have an active enquiry for this property.");
+        } else if (err.statusCode === 400 && err.message.toLowerCase().includes("own property")) {
+          setErrorMessage("You cannot submit an enquiry for your own property.");
+        } else if (err.statusCode === 403) {
+          setErrorMessage("You do not have permission to submit an enquiry for this property.");
+        } else if (err.statusCode === 401) {
+          setErrorMessage("Your session has expired. Please sign in again.");
+        } else {
+          setErrorMessage(err.message || "Failed to submit commercial enquiry.");
+        }
+      } else {
+        setErrorMessage(
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred. Please try again."
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+
+    if (!name || !phone || !email || !companyName) {
+      setErrorMessage("Please fill in your name, contact phone, business email, and company name.");
+      return;
+    }
+
+    if (!isAuthenticated) {
+      const canProceed = requireAuth({
+        title: "Sign in to submit commercial enquiry",
+        message: "Sign in with your verified profile to connect directly with commercial leasing directors.",
+        onAuthenticated: () => executeSubmit(),
+      });
+      if (canProceed) {
+        executeSubmit();
+      }
+      return;
+    }
+
+    executeSubmit();
   };
 
   return (
@@ -75,7 +135,7 @@ export function CommercialEnquiryModal({
         {/* Close Button */}
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleReset}
           className="absolute top-4 right-4 p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-light transition-colors cursor-pointer"
           aria-label="Close modal"
         >
@@ -93,18 +153,22 @@ export function CommercialEnquiryModal({
                 Commercial Enquiry Transmitted!
               </h3>
               <p className="text-xs text-text-secondary max-w-sm mx-auto">
-                Thank you, <strong>{name}</strong> from <strong>{companyName}</strong>. The commercial leasing director for {property.title} will contact you shortly at {phone}.
+                Thank you, <strong>{name}</strong> from <strong>{companyName}</strong>. The commercial leasing team for {property.title} will contact you shortly at {phone}.
               </p>
             </div>
 
-            <div className="p-3 rounded-lg bg-bg-light border border-border-subtle text-xs text-left space-y-1">
-              <p>
+            <div className="p-3 rounded-lg bg-bg-light border border-border-subtle text-xs text-left space-y-1.5">
+              <div className="flex justify-between items-center border-b border-border-subtle pb-1">
+                <span className="text-text-muted">Status</span>
+                <span className="font-bold text-success-green">{createdEnquiry?.status || "NEW"}</span>
+              </div>
+              <p className="text-text-secondary truncate">
                 <strong>Property:</strong> {property.title}
               </p>
-              <p>
+              <p className="text-text-secondary">
                 <strong>Area:</strong> {property.carpetArea} ({property.floor})
               </p>
-              <p>
+              <p className="text-text-secondary">
                 <strong>Interest:</strong> {interestType}
               </p>
             </div>
@@ -114,7 +178,7 @@ export function CommercialEnquiryModal({
               onClick={handleReset}
               className="w-full text-xs font-bold"
             >
-              Back to Commercial Listings
+              Done
             </Button>
           </div>
         ) : (
@@ -137,6 +201,13 @@ export function CommercialEnquiryModal({
                 {property.carpetArea} • {property.location} • {property.priceFormatted}
               </p>
             </div>
+
+            {errorMessage && (
+              <div className="rounded-xl bg-error-red-light/70 border border-error-red/30 p-3 text-xs flex items-start gap-2 text-error-red animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-3.5">
@@ -249,6 +320,7 @@ export function CommercialEnquiryModal({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-border-default text-xs text-text-primary focus:border-accent-gold focus:outline-none resize-none font-sans"
+                  maxLength={2000}
                 />
               </div>
 
@@ -257,6 +329,7 @@ export function CommercialEnquiryModal({
                 type="submit"
                 variant="primary"
                 isLoading={isLoading}
+                disabled={isLoading}
                 leftIcon={<Send className="w-4 h-4" />}
                 className="w-full h-11 text-xs font-bold shadow-soft"
               >

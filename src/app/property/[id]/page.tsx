@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -13,20 +13,14 @@ import {
   CheckCircle2,
   PhoneCall,
   ShieldCheck,
-  Building,
   Heart,
   Share2,
-  Compass,
-  Car,
-  Layers,
   Calculator,
-  Train,
   Sparkles,
   Clock,
   Sofa,
-  Users,
-  Briefcase,
-  Hospital,
+  AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import {
   Container,
@@ -37,11 +31,13 @@ import {
   Card,
   Input,
 } from "@/components/ui";
-import { MOCK_PROPERTIES } from "@/data/mockProperties";
-import { MOCK_RENTALS } from "@/data/mockRentals";
 import { PropertyCard } from "@/components/marketplace/PropertyCard";
 import { ContactModal } from "@/components/marketplace/ContactModal";
-import { RentEnquiryModal } from "@/components/rent/RentEnquiryModal";
+import { PropertyApiService } from "@/lib/services/property-api";
+import { FavoriteApiService } from "@/lib/services/favorite-api";
+import { SiteVisitApiService } from "@/lib/services/site-visit-api";
+import { useAuth } from "@/lib/auth/auth-context";
+import { Property } from "@/types/property";
 
 interface DisplayProperty {
   id: string;
@@ -90,97 +86,154 @@ export default function PropertyDetailPage() {
   const params = useParams();
   const propertyId = params?.id as string;
 
-  // Check in mock rentals first, then mock properties
-  const rentalItem = MOCK_RENTALS.find((r) => r.id === propertyId);
-  const isRental = Boolean(rentalItem);
+  const [backendProperty, setBackendProperty] = useState<Property | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const rawProperty = MOCK_PROPERTIES.find((p) => p.id === propertyId) || MOCK_PROPERTIES[0];
+  // Fetch real property from backend on mount or propertyId change
+  useEffect(() => {
+    let isMounted = true;
 
-  const property: DisplayProperty = rentalItem
-    ? {
-        id: rentalItem.id,
-        title: rentalItem.title,
-        price: rentalItem.formattedRent,
-        priceNumeric: rentalItem.monthlyRent,
-        bhk: rentalItem.bhkNumeric,
-        bhkString: rentalItem.bhk,
-        bathrooms: rentalItem.bathrooms,
-        carpetArea: rentalItem.carpetArea,
-        location: rentalItem.location,
-        city: rentalItem.city,
-        address: rentalItem.address,
-        propertyType: rentalItem.propertyType,
-        listingType: "rent",
-        isReraVerified: rentalItem.isReraVerified,
-        reraNumber: "RERA-VERIFIED-RENTAL",
-        sellerType: rentalItem.sellerType,
-        sellerName: rentalItem.sellerName,
-        sellerPhone: rentalItem.sellerPhone,
-        isFeatured: rentalItem.isFeatured,
-        image: rentalItem.image,
-        images: rentalItem.images,
-        description: rentalItem.description,
-        furnishingStatus: rentalItem.furnishingStatus,
-        possessionStatus: rentalItem.availability,
-        floor: rentalItem.floor,
-        facing: rentalItem.facing,
-        parking: rentalItem.parking,
-        amenities: rentalItem.amenities,
-        postedDate: rentalItem.postedDate,
-        securityDeposit: rentalItem.securityDeposit,
-        maintenanceCharges: rentalItem.maintenanceCharges,
-        noticePeriod: rentalItem.noticePeriod,
-        tenantPreference: rentalItem.tenantPreference,
-        nearbyFacilities: rentalItem.nearbyFacilities,
+    async function load() {
+      if (!propertyId) return;
+      try {
+        let prop = await PropertyApiService.getPropertyById(propertyId);
+        if (!prop) {
+          prop = await PropertyApiService.getPropertyBySlug(propertyId);
+        }
+        if (isMounted) {
+          if (prop) {
+            setBackendProperty(prop);
+            setFetchError(null);
+          } else {
+            setFetchError("Property listing not found or has been archived.");
+          }
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          const msg = err instanceof Error ? err.message : "Failed to load property details.";
+          setFetchError(msg);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-    : {
-        id: rawProperty.id,
-        title: rawProperty.title,
-        price: rawProperty.price,
-        priceNumeric: rawProperty.priceNumeric,
-        bhk: rawProperty.bhk,
-        bhkString: `${rawProperty.bhk} BHK`,
-        bathrooms: rawProperty.bathrooms,
-        carpetArea: rawProperty.carpetArea,
-        location: rawProperty.location,
-        city: rawProperty.city,
-        address: rawProperty.address,
-        propertyType: rawProperty.propertyType,
-        listingType: rawProperty.listingType,
-        isReraVerified: rawProperty.isReraVerified,
-        reraNumber: rawProperty.reraNumber,
-        sellerType: rawProperty.sellerType,
-        sellerName: rawProperty.sellerName,
-        sellerPhone: rawProperty.sellerPhone,
-        isFeatured: rawProperty.isFeatured,
-        image: rawProperty.image,
-        images: rawProperty.images,
-        description: rawProperty.description,
-        furnishingStatus: rawProperty.furnishingStatus,
-        possessionStatus: rawProperty.possessionStatus,
-        floor: rawProperty.floor,
-        facing: rawProperty.facing,
-        parking: rawProperty.parking,
-        amenities: rawProperty.amenities,
-        postedDate: rawProperty.postedDate,
-      };
+    }
 
+    load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [propertyId]);
+
+  const handleManualRetry = () => {
+    setIsLoading(true);
+    setFetchError(null);
+    PropertyApiService.getPropertyById(propertyId)
+      .then((prop) => {
+        if (prop) {
+          setBackendProperty(prop);
+        } else {
+          setFetchError("Property listing not found or has been archived.");
+        }
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Failed to load property details.";
+        setFetchError(msg);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
+
+  const property: DisplayProperty | null = backendProperty
+    ? {
+        id: backendProperty.id,
+        title: backendProperty.title,
+        price: backendProperty.price,
+        priceNumeric: backendProperty.priceNumeric,
+        bhk: backendProperty.bhk,
+        bhkString: `${backendProperty.bhk} BHK`,
+        bathrooms: backendProperty.bathrooms,
+        carpetArea: backendProperty.carpetArea,
+        location: backendProperty.location,
+        city: backendProperty.city,
+        address: backendProperty.address,
+        propertyType: backendProperty.propertyType,
+        listingType: backendProperty.listingType,
+        isReraVerified: backendProperty.isReraVerified,
+        reraNumber: backendProperty.reraNumber,
+        sellerType: backendProperty.sellerType,
+        sellerName: backendProperty.sellerName,
+        sellerPhone: backendProperty.sellerPhone,
+        isFeatured: backendProperty.isFeatured,
+        image: backendProperty.image,
+        images: backendProperty.images,
+        description: backendProperty.description,
+        furnishingStatus: backendProperty.furnishingStatus,
+        possessionStatus: backendProperty.possessionStatus,
+        amenities: backendProperty.amenities,
+        postedDate: backendProperty.postedDate,
+      }
+    : null;
+
+  const isRental = property?.listingType?.toLowerCase() === "rent";
+
+  const { isAuthenticated, requireAuth } = useAuth();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isTogglingFav, setIsTogglingFav] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+
+  // Sync initial favorite status from backend for authenticated users
+  useEffect(() => {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
+    if (isAuthenticated && isUuid) {
+      FavoriteApiService.getFavoriteStatus(propertyId)
+        .then((res) => {
+          setIsFavorite(res.isFavorited);
+        })
+        .catch(() => {
+          // Handled silently
+        });
+    }
+  }, [isAuthenticated, propertyId]);
+
+  // Similar Properties State (Live from backend)
+  const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
+
+  useEffect(() => {
+    if (property?.city) {
+      PropertyApiService.getProperties({
+        city: property.city !== "All" ? property.city : undefined,
+        limit: 4,
+      })
+        .then((res) => {
+          setSimilarProperties((res.properties || []).filter((p) => p.id !== property.id).slice(0, 3));
+        })
+        .catch(() => {
+          setSimilarProperties([]);
+        });
+    }
+  }, [property?.id, property?.city]);
 
   // Site Visit State
   const [visitDate, setVisitDate] = useState("");
   const [visitSlot, setVisitSlot] = useState("11:00 AM - 01:00 PM");
   const [isVisitBooked, setIsVisitBooked] = useState(false);
 
-  // EMI Calculator State (for sale listings)
-  const [loanAmount, setLoanAmount] = useState(
-    Math.round((property.priceNumeric || 5000000) * 0.8)
-  );
+  // EMI Calculator State
+  const [customLoanAmount, setCustomLoanAmount] = useState<number | null>(null);
   const [interestRate, setInterestRate] = useState(8.5);
   const [tenureYears, setTenureYears] = useState(20);
+
+  const loanAmount =
+    customLoanAmount !== null
+      ? customLoanAmount
+      : Math.round((property?.priceNumeric || 5000000) * 0.8);
 
   const calculateEMI = () => {
     const monthlyRate = interestRate / 12 / 100;
@@ -191,413 +244,414 @@ export default function PropertyDetailPage() {
     return Math.round(emi);
   };
 
-  const handleFavoriteToggle = () => {
+  const executeFavoriteToggle = async () => {
+    if (isTogglingFav) return;
+    setIsTogglingFav(true);
     const nextState = !isFavorite;
     setIsFavorite(nextState);
-    setSaveToast(
-      nextState
-        ? "Property added to your shortlisted favorites!"
-        : "Property removed from your favorites."
-    );
-    setTimeout(() => setSaveToast(null), 3000);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
+    if (isUuid) {
+      try {
+        const res = await FavoriteApiService.toggleFavorite(propertyId, !nextState);
+        setSaveToast(
+          res.isFavorited
+            ? "Property added to your shortlisted favorites!"
+            : "Property removed from your favorites."
+        );
+      } catch (err: unknown) {
+        setIsFavorite(!nextState); // Rollback
+        const msg = err instanceof Error ? err.message : "Unable to update saved property.";
+        setSaveToast(msg);
+      } finally {
+        setIsTogglingFav(false);
+        setTimeout(() => setSaveToast(null), 3000);
+      }
+    } else {
+      setSaveToast(
+        nextState
+          ? "Property added to your shortlisted favorites!"
+          : "Property removed from your favorites."
+      );
+      setIsTogglingFav(false);
+      setTimeout(() => setSaveToast(null), 3000);
+    }
   };
 
-  const handleBookVisit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!visitDate) {
-      alert("Please choose a preferred date for the site visit.");
+  const handleFavoriteToggle = () => {
+    if (!isAuthenticated) {
+      const allowed = requireAuth({
+        title: "Sign in to save properties",
+        message: "Sign in to keep your shortlisted properties and access them across all devices.",
+        onAuthenticated: () => executeFavoriteToggle(),
+      });
+      if (allowed) {
+        executeFavoriteToggle();
+      }
       return;
     }
-    setIsVisitBooked(true);
+    executeFavoriteToggle();
   };
 
-  // Similar Properties
-  const similarProperties = MOCK_PROPERTIES.filter(
-    (p) => p.id !== property.id && p.city === property.city
-  ).slice(0, 3);
+  const handleShare = () => {
+    if (typeof window !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(window.location.href);
+      setSaveToast("Property link copied to clipboard!");
+      setTimeout(() => setSaveToast(null), 3000);
+    }
+  };
+
+  const [isBookingLoading, setIsBookingLoading] = useState(false);
+
+  const executeBookVisit = async () => {
+    if (!visitDate || isBookingLoading || !property) return;
+    setIsBookingLoading(true);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(property.id);
+    if (isUuid) {
+      try {
+        let hour = 11;
+        if (visitSlot.startsWith("10:")) hour = 10;
+        else if (visitSlot.startsWith("12:")) hour = 12;
+        else if (visitSlot.startsWith("02:")) hour = 14;
+        else if (visitSlot.startsWith("04:")) hour = 16;
+
+        const scheduledDate = new Date(`${visitDate}T${String(hour).padStart(2, "0")}:00:00.000Z`);
+        const targetIso = scheduledDate.toISOString();
+
+        await SiteVisitApiService.createSiteVisit(property.id, {
+          scheduledAt: targetIso,
+          buyerNote: `Requested slot: ${visitSlot}`,
+        });
+
+        setIsVisitBooked(true);
+        setSaveToast(`Site visit requested successfully for ${visitDate} (${visitSlot})!`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Unable to book site visit. Please try again.";
+        setSaveToast(msg);
+      } finally {
+        setIsBookingLoading(false);
+        setTimeout(() => setSaveToast(null), 4000);
+      }
+    } else {
+      setIsVisitBooked(true);
+      setIsBookingLoading(false);
+      setSaveToast(`Site visit requested for ${visitDate} (${visitSlot}).`);
+      setTimeout(() => setSaveToast(null), 4000);
+    }
+  };
+
+  const handleBookVisitSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!visitDate) return;
+    if (!isAuthenticated) {
+      const allowed = requireAuth({
+        title: "Sign in to book a site visit",
+        message: "Sign in to schedule and track verified on-site property walkthroughs.",
+        onAuthenticated: () => executeBookVisit(),
+      });
+      if (allowed) {
+        executeBookVisit();
+      }
+      return;
+    }
+    executeBookVisit();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="py-12 bg-bg-light min-h-screen">
+        <Container>
+          <div className="animate-pulse space-y-6 max-w-5xl mx-auto">
+            <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+            <div className="h-96 bg-slate-200 rounded-2xl w-full"></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 h-64 bg-slate-200 rounded-xl"></div>
+              <div className="h-64 bg-slate-200 rounded-xl"></div>
+            </div>
+          </div>
+        </Container>
+      </div>
+    );
+  }
+
+  if (!property) {
+    return (
+      <div className="py-24 bg-bg-light min-h-[60vh] flex items-center justify-center text-center">
+        <Container>
+          <div className="max-w-md mx-auto p-8 bg-white rounded-2xl border border-border-default shadow-soft-sm space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold text-primary-navy">Property Listing Unavailable</h2>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              {fetchError || "This listing is currently under review, unpublished, or has been archived by the administrator."}
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Link href="/properties">
+                <Button variant="primary" size="sm" className="text-xs font-bold">
+                  Browse Active Properties
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManualRetry}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                className="text-xs font-bold"
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        </Container>
+      </div>
+    );
+  }
 
   return (
-    <div className="py-8 bg-bg-light min-h-screen font-sans text-text-primary">
+    <div className="py-6 sm:py-8 bg-bg-light min-h-screen font-sans text-text-primary">
       <Container className="space-y-6">
-        {/* Toast Notification */}
+        {/* Save/Share Toast */}
         {saveToast && (
-          <div className="fixed top-20 right-6 z-50 rounded-xl bg-primary-navy text-white px-4 py-3 text-xs font-semibold shadow-soft-lg flex items-center gap-2 animate-in fade-in slide-in-from-top duration-300">
-            <Heart className="w-4 h-4 fill-error-red text-error-red" />
-            <span>{saveToast}</span>
+          <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-dark-navy text-white px-4 py-2.5 text-xs font-semibold shadow-soft-xl animate-in fade-in slide-in-from-bottom-3 duration-200 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-accent-gold" />
+            {saveToast}
           </div>
         )}
 
-        {/* Back Link & Action Bar */}
+        {/* Top Breadcrumb & Actions */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Link
-            href={isRental ? "/rent" : "/buy"}
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-text-secondary hover:text-primary-navy transition-colors"
+            href={isRental ? "/rent" : "/properties"}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-primary-navy transition-colors group"
           >
-            <ArrowLeft className="w-4 h-4" />
-            Back to {isRental ? "Rental Marketplace" : "Properties Search"}
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+            Back to {isRental ? "Rental Properties" : "All Properties"}
           </Link>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={handleFavoriteToggle}
-              leftIcon={
-                <Heart
-                  className={`w-4 h-4 ${
-                    isFavorite ? "fill-error-red text-error-red" : ""
-                  }`}
-                />
-              }
-              className="text-xs font-semibold"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                isFavorite
+                  ? "bg-error-red-light border-error-red/30 text-error-red"
+                  : "bg-white border-border-default text-text-secondary hover:text-primary-navy"
+              }`}
             >
-              {isFavorite ? "Saved" : "Save Property"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<Share2 className="w-4 h-4" />}
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  navigator.clipboard?.writeText(window.location.href);
-                  alert("Property link copied to clipboard!");
-                }
-              }}
-              className="text-xs font-semibold"
+              <Heart
+                className={`w-3.5 h-3.5 ${
+                  isFavorite ? "fill-error-red text-error-red" : ""
+                }`}
+              />
+              {isFavorite ? "Saved" : "Save"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border-default bg-white text-xs font-semibold text-text-secondary hover:text-primary-navy transition-colors cursor-pointer"
             >
+              <Share2 className="w-3.5 h-3.5" />
               Share
-            </Button>
+            </button>
           </div>
         </div>
 
-        {/* Title & Badges Bar */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border-default pb-6">
-          <div className="space-y-2">
+        {/* Main Title & Price Header */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-5 rounded-2xl border border-border-default shadow-soft-xs">
+          <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              {property.isReraVerified && <ReraBadge />}
-              {property.sellerType === "owner" ? <OwnerBadge /> : <AgentBadge />}
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-white border border-border-default text-primary-navy uppercase tracking-wider">
+              {property.isReraVerified && <ReraBadge size="sm" />}
+              {property.sellerType === "owner" ? (
+                <OwnerBadge size="sm" />
+              ) : (
+                <AgentBadge size="sm" />
+              )}
+              <span className="rounded bg-bg-light border border-border-subtle px-2 py-0.5 text-[11px] font-semibold text-text-secondary uppercase">
                 {property.propertyType}
               </span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-bg-light border border-border-subtle text-text-secondary">
-                {property.possessionStatus}
-              </span>
             </div>
-            <h1 className="heading-section text-primary-navy">{property.title}</h1>
-            <p className="text-sm text-text-secondary flex items-center gap-1.5">
+
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-primary-navy tracking-tight">
+              {property.title}
+            </h1>
+
+            <p className="text-xs sm:text-sm text-text-secondary flex items-center gap-1">
               <MapPin className="w-4 h-4 text-accent-gold shrink-0" />
               {property.address}
             </p>
           </div>
 
-          <div className="text-left md:text-right">
-            <p className="text-xs text-text-muted">
-              {isRental ? "Monthly Rent" : "Total Asking Price"}
-            </p>
-            <p className="text-3xl font-bold text-primary-navy tracking-tight">
+          <div className="md:text-right border-t md:border-t-0 pt-3 md:pt-0 border-border-subtle shrink-0">
+            <div className="text-2xl sm:text-3xl font-black text-primary-navy tracking-tight">
               {property.price}
+            </div>
+            <p className="text-xs text-text-muted">
+              {isRental
+                ? "Monthly Rent (Excludes Maintenance)"
+                : "All Inclusive Estimated Cost"}
             </p>
-            {isRental && property.securityDeposit && (
-              <p className="text-xs font-medium text-text-secondary mt-0.5">
-                Security Deposit:{" "}
-                <strong className="text-primary-navy">
-                  {property.securityDeposit}
-                </strong>
-              </p>
-            )}
-            {!isRental && (
-              <p className="text-xs text-text-secondary mt-0.5">
-                Approx. ₹{" "}
-                {Math.round(
-                  property.priceNumeric /
-                    parseInt(property.carpetArea.replace(/[^0-9]/g, ""))
-                ).toLocaleString("en-IN")}{" "}
-                / sq.ft
-              </p>
-            )}
           </div>
         </div>
 
-        {/* Media Gallery */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-3 relative aspect-16/10 rounded-2xl overflow-hidden bg-slate-200 border border-border-default shadow-soft">
+        {/* Photo Gallery Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-[360px] sm:h-[440px] md:h-[480px]">
+          {/* Main Hero Photo (8 cols) */}
+          <div className="relative lg:col-span-8 h-full rounded-2xl overflow-hidden bg-slate-100 border border-border-default group">
             <Image
               src={property.images[activeImageIndex] || property.image}
-              alt={property.title}
+              alt={`${property.title} - View ${activeImageIndex + 1}`}
               fill
               priority
-              sizes="(max-width: 768px) 100vw, 75vw"
-              className="object-cover"
+              className="object-cover transition-transform duration-500 group-hover:scale-102"
             />
+            <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-xs text-white text-xs font-semibold px-3 py-1 rounded-lg">
+              {activeImageIndex + 1} / {property.images.length} Photos
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
+          {/* Thumbnail Strip (4 cols) */}
+          <div className="hidden lg:grid lg:col-span-4 grid-rows-3 gap-3 h-full">
             {property.images.slice(0, 3).map((img, idx) => (
-              <button
+              <div
                 key={idx}
-                type="button"
                 onClick={() => setActiveImageIndex(idx)}
-                className={`relative aspect-16/10 md:aspect-auto md:h-28 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                className={`relative h-full rounded-xl overflow-hidden bg-slate-100 border cursor-pointer transition-all ${
                   activeImageIndex === idx
-                    ? "border-accent-gold ring-2 ring-accent-gold/30"
-                    : "border-border-default hover:border-border-dark opacity-80 hover:opacity-100"
+                    ? "border-accent-gold ring-2 ring-accent-gold/40"
+                    : "border-border-default hover:border-text-secondary"
                 }`}
               >
                 <Image
                   src={img}
                   alt={`Thumbnail ${idx + 1}`}
                   fill
-                  sizes="20vw"
                   className="object-cover"
                 />
-              </button>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Content & Sidebar Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4 items-start">
-          {/* Main Details (2 cols) */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Key Specs Card */}
-            <Card className="p-6">
-              <h2 className="text-base font-bold text-primary-navy mb-4 pb-2 border-b border-border-subtle">
-                Overview & Specifications
+        {/* Content Layout: 8 cols Details + 4 cols Sticky Contact Sidebar */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* LEFT: 8 Cols Detailed Info */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Highlights Grid */}
+            <Card className="p-5">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-accent-gold-hover mb-4">
+                Property Overview & Specs
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <Maximize className="w-5 h-5 text-accent-gold shrink-0" />
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-light border border-border-subtle">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-border-default flex items-center justify-center text-accent-gold shrink-0">
+                    <Maximize className="w-5 h-5" />
+                  </div>
                   <div>
-                    <span className="text-text-muted block">Carpet Area</span>
-                    <strong className="text-text-primary font-semibold text-sm">
+                    <p className="text-[11px] text-text-muted">Carpet Area</p>
+                    <p className="text-xs font-bold text-primary-navy">
                       {property.carpetArea}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <BedDouble className="w-5 h-5 text-accent-gold shrink-0" />
-                  <div>
-                    <span className="text-text-muted block">Configuration</span>
-                    <strong className="text-text-primary font-semibold text-sm">
-                      {property.bhk} BHK
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <Bath className="w-5 h-5 text-accent-gold shrink-0" />
-                  <div>
-                    <span className="text-text-muted block">Bathrooms</span>
-                    <strong className="text-text-primary font-semibold text-sm">
-                      {property.bathrooms} Baths
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <Building className="w-5 h-5 text-accent-gold shrink-0" />
-                  <div>
-                    <span className="text-text-muted block">
-                      {isRental ? "Availability" : "Possession"}
-                    </span>
-                    <strong className="text-text-primary font-semibold text-sm">
-                      {property.possessionStatus}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <Layers className="w-5 h-5 text-accent-gold shrink-0" />
-                  <div>
-                    <span className="text-text-muted block">Floor Level</span>
-                    <strong className="text-text-primary font-semibold text-sm">
-                      {property.floor || "High Floor"}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <Compass className="w-5 h-5 text-accent-gold shrink-0" />
-                  <div>
-                    <span className="text-text-muted block">Facing</span>
-                    <strong className="text-text-primary font-semibold text-sm">
-                      {property.facing || "East Facing"}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <Car className="w-5 h-5 text-accent-gold shrink-0" />
-                  <div>
-                    <span className="text-text-muted block">Parking</span>
-                    <strong className="text-text-primary font-semibold text-sm">
-                      {property.parking || "1 Covered"}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-light border border-border-subtle">
-                  <Sofa className="w-5 h-5 text-accent-gold shrink-0" />
-                  <div>
-                    <span className="text-text-muted block">Furnishing</span>
-                    <strong className="text-text-primary font-semibold text-sm">
-                      {property.furnishingStatus}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Rental Terms Card (If Rental) */}
-            {isRental && (
-              <Card className="p-6 space-y-4 border-accent-gold/40">
-                <h2 className="text-base font-bold text-primary-navy pb-2 border-b border-border-subtle flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-accent-gold" />
-                  Rental Terms & Agreement Summary
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3 rounded-lg bg-bg-light border border-border-subtle">
-                    <span className="text-text-muted block">Monthly Rent</span>
-                    <strong className="text-primary-navy text-sm font-bold block">
-                      {property.price}
-                    </strong>
-                  </div>
-                  <div className="p-3 rounded-lg bg-bg-light border border-border-subtle">
-                    <span className="text-text-muted block">Security Deposit</span>
-                    <strong className="text-primary-navy text-sm font-bold block">
-                      {property.securityDeposit || "2 Months"}
-                    </strong>
-                  </div>
-                  <div className="p-3 rounded-lg bg-bg-light border border-border-subtle">
-                    <span className="text-text-muted block">Maintenance</span>
-                    <strong className="text-primary-navy text-sm font-bold block">
-                      {property.maintenanceCharges || "Included"}
-                    </strong>
-                  </div>
-                  <div className="p-3 rounded-lg bg-bg-light border border-border-subtle">
-                    <span className="text-text-muted block">Notice Period</span>
-                    <strong className="text-primary-navy text-sm font-bold block">
-                      {property.noticePeriod || "1 Month"}
-                    </strong>
-                  </div>
-                </div>
-
-                {property.tenantPreference && (
-                  <div className="pt-2 text-xs flex items-center gap-2">
-                    <Users className="w-4 h-4 text-accent-gold" />
-                    <span className="text-text-secondary">
-                      Tenant Preference:{" "}
-                      <strong className="text-primary-navy">
-                        {property.tenantPreference.join(", ")}
-                      </strong>
-                    </span>
-                  </div>
-                )}
-              </Card>
-            )}
-
-            {/* Description & Highlights */}
-            <Card className="p-6 space-y-4">
-              <h2 className="text-base font-bold text-primary-navy pb-2 border-b border-border-subtle">
-                About This Property
-              </h2>
-              <p className="text-sm text-text-secondary leading-relaxed">
-                {property.description}
-              </p>
-
-              {/* RERA Guarantee Box */}
-              {property.isReraVerified && (
-                <div className="flex items-start gap-3 p-4 rounded-xl bg-success-green-light border border-success-green-border mt-4">
-                  <ShieldCheck className="w-6 h-6 text-success-green shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="text-xs font-bold text-success-green uppercase tracking-wide">
-                      100% Verified Legal Listing
-                    </h3>
-                    <p className="text-xs text-text-primary mt-0.5">
-                      Direct owner profile confirmed with title deed check and zero broker fee guarantee.
                     </p>
                   </div>
                 </div>
-              )}
-            </Card>
 
-            {/* Amenities Card */}
-            <Card className="p-6 space-y-4">
-              <h2 className="text-base font-bold text-primary-navy pb-2 border-b border-border-subtle">
-                Society & Project Amenities
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {property.amenities.map((amenity, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-2 p-2.5 rounded-lg bg-bg-light text-xs font-medium text-text-primary"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-success-green shrink-0" />
-                    <span>{amenity}</span>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-light border border-border-subtle">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-border-default flex items-center justify-center text-accent-gold shrink-0">
+                    <BedDouble className="w-5 h-5" />
                   </div>
-                ))}
-              </div>
-            </Card>
+                  <div>
+                    <p className="text-[11px] text-text-muted">Bedrooms</p>
+                    <p className="text-xs font-bold text-primary-navy">
+                      {property.bhkString || `${property.bhk} BHK`}
+                    </p>
+                  </div>
+                </div>
 
-            {/* Location & Neighborhood Advantage */}
-            <Card className="p-6 space-y-4">
-              <h2 className="text-base font-bold text-primary-navy pb-2 border-b border-border-subtle">
-                Nearby Transit & Facilities
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 rounded-lg bg-bg-light border border-border-subtle space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-primary-navy">
-                    <Train className="w-4 h-4 text-accent-gold" />
-                    Metro Station
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-light border border-border-subtle">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-border-default flex items-center justify-center text-accent-gold shrink-0">
+                    <Bath className="w-5 h-5" />
                   </div>
-                  <p className="text-text-secondary">
-                    {property.nearbyFacilities?.metro || "Within 1 km radius"}
-                  </p>
+                  <div>
+                    <p className="text-[11px] text-text-muted">Bathrooms</p>
+                    <p className="text-xs font-bold text-primary-navy">
+                      {property.bathrooms} Baths
+                    </p>
+                  </div>
                 </div>
-                <div className="p-3 rounded-lg bg-bg-light border border-border-subtle space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-primary-navy">
-                    <Briefcase className="w-4 h-4 text-accent-gold" />
-                    IT & Business Hub
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-light border border-border-subtle">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-border-default flex items-center justify-center text-accent-gold shrink-0">
+                    <Sofa className="w-5 h-5" />
                   </div>
-                  <p className="text-text-secondary">
-                    {property.nearbyFacilities?.itParks || "10 mins to tech corridors"}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-bg-light border border-border-subtle space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-primary-navy">
-                    <Hospital className="w-4 h-4 text-accent-gold" />
-                    Healthcare & Schools
+                  <div>
+                    <p className="text-[11px] text-text-muted">Furnishing</p>
+                    <p className="text-xs font-bold text-primary-navy truncate">
+                      {property.furnishingStatus}
+                    </p>
                   </div>
-                  <p className="text-text-secondary">
-                    {property.nearbyFacilities?.hospitals || "5 mins to top multispecialty hospitals"}
-                  </p>
                 </div>
               </div>
             </Card>
 
-            {/* Home Loan EMI Calculator (Only for Buy) */}
-            {!isRental && (
-              <Card className="p-6 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
-                  <h2 className="text-base font-bold text-primary-navy flex items-center gap-2">
-                    <Calculator className="w-5 h-5 text-accent-gold" />
-                    Home Loan EMI Calculator
+            {/* Description */}
+            <Card className="p-5 sm:p-6 space-y-3">
+              <h2 className="text-base font-bold text-primary-navy">
+                About This Property
+              </h2>
+              <p className="text-xs sm:text-sm text-text-secondary leading-relaxed whitespace-pre-line">
+                {property.description}
+              </p>
+            </Card>
+
+            {/* Amenities Section */}
+            {property.amenities.length > 0 && (
+              <Card className="p-5 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-bold text-primary-navy">
+                    Amenities & Features
                   </h2>
-                  <span className="text-xs font-bold text-accent-gold-hover">
-                    Estimated EMI: ₹ {calculateEMI().toLocaleString("en-IN")} / mo
+                  <span className="text-xs font-semibold text-accent-gold">
+                    {property.amenities.length} Verified Highlights
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {property.amenities.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 p-2.5 rounded-lg bg-bg-light border border-border-subtle text-xs font-medium text-text-primary"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-success-green shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* EMI Home Loan Calculator */}
+            {!isRental && (
+              <Card className="p-5 sm:p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-accent-gold" />
+                  <h2 className="text-base font-bold text-primary-navy">
+                    Home Loan EMI Calculator
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                   <div>
                     <label className="text-xs font-semibold text-text-secondary block mb-1">
-                      Loan Amount (80% Default)
+                      Loan Amount (₹)
                     </label>
                     <Input
                       type="number"
                       value={loanAmount}
-                      onChange={(e) => setLoanAmount(Number(e.target.value))}
+                      onChange={(e) => setCustomLoanAmount(Number(e.target.value))}
+                      step={100000}
                     />
                   </div>
 
@@ -607,96 +661,95 @@ export default function PropertyDetailPage() {
                     </label>
                     <Input
                       type="number"
-                      step="0.1"
                       value={interestRate}
                       onChange={(e) => setInterestRate(Number(e.target.value))}
+                      step={0.1}
                     />
                   </div>
 
                   <div>
                     <label className="text-xs font-semibold text-text-secondary block mb-1">
-                      Loan Tenure (Years)
+                      Tenure (Years)
                     </label>
                     <Input
                       type="number"
                       value={tenureYears}
                       onChange={(e) => setTenureYears(Number(e.target.value))}
+                      min={1}
+                      max={30}
                     />
                   </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-primary-navy text-white flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-white/70">Estimated Monthly EMI</p>
+                    <p className="text-xl font-bold text-accent-gold">
+                      ₹{calculateEMI().toLocaleString("en-IN")} / month
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-white/60">
+                    Calculated for {tenureYears} yrs @ {interestRate}%
+                  </span>
                 </div>
               </Card>
             )}
           </div>
 
-          {/* Sidebar (1 col) */}
-          <div className="space-y-6 lg:sticky lg:top-24">
-            {/* Contact Seller Card */}
-            <Card className="p-6 border-accent-gold/40 shadow-soft-md space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-accent-gold-light text-[#9E6E18] border border-accent-gold-muted">
-                  Direct Seller Connect
-                </span>
-                <ShieldCheck className="w-4 h-4 text-success-green" />
+          {/* RIGHT: 4 Cols Sticky Seller & Site Visit Box */}
+          <div className="lg:col-span-4 space-y-6 sticky top-24">
+            {/* Seller Contact Card */}
+            <Card className="p-5 sm:p-6 space-y-4 border-2 border-border-default">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-primary-navy text-accent-gold font-black text-lg flex items-center justify-center">
+                  {property.sellerName.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-primary-navy flex items-center gap-1">
+                    {property.sellerName}
+                    <ShieldCheck className="w-4 h-4 text-accent-gold" />
+                  </h3>
+                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-bg-light border border-border-subtle text-text-secondary uppercase">
+                    Verified {property.sellerType}
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <span className="text-xs text-text-muted">Offered by:</span>
-                <h3 className="text-base font-bold text-primary-navy">
-                  {property.sellerName}
-                </h3>
-                <p className="text-xs text-success-green font-semibold mt-0.5">
-                  Zero Brokerage Verified Profile
+              <div className="space-y-2 pt-2 border-t border-border-subtle">
+                <Button
+                  variant="primary"
+                  className="w-full h-11 text-xs font-bold"
+                  onClick={() => setIsContactOpen(true)}
+                  leftIcon={<PhoneCall className="w-4 h-4 text-accent-gold" />}
+                >
+                  Contact Seller Directly
+                </Button>
+
+                <p className="text-[11px] text-center text-text-muted">
+                  Zero Brokerage on Direct Owner Properties
                 </p>
               </div>
-
-              <div className="p-3 rounded-lg bg-bg-light text-xs text-text-secondary space-y-1">
-                <p>
-                  <strong>Property ID:</strong> {property.id}
-                </p>
-                <p>
-                  <strong>Location:</strong> {property.location}
-                </p>
-                <p>
-                  <strong>{isRental ? "Monthly Rent" : "Price"}:</strong>{" "}
-                  {property.price}
-                </p>
-              </div>
-
-              <Button
-                variant="primary"
-                className="w-full h-11 text-xs font-bold shadow-soft"
-                onClick={() => setIsContactOpen(true)}
-                leftIcon={<PhoneCall className="w-4 h-4" />}
-              >
-                Contact {property.sellerType === "owner" ? "Owner" : "Agent"}
-              </Button>
-
-              <p className="text-[11px] text-text-muted text-center leading-tight">
-                Free instant callback without spam. 100% privacy protected.
-              </p>
             </Card>
 
-            {/* Schedule a Free Site Visit */}
-            <Card className="p-6 space-y-3.5 border-border-default">
+            {/* Schedule Visit Card */}
+            <Card className="p-5 sm:p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-accent-gold" />
                 <h3 className="text-sm font-bold text-primary-navy">
-                  Schedule a Site Visit
+                  Schedule an In-Person Site Visit
                 </h3>
               </div>
 
               {isVisitBooked ? (
-                <div className="p-3 rounded-lg bg-success-green-light border border-success-green-border text-center space-y-1">
-                  <CheckCircle2 className="w-5 h-5 text-success-green mx-auto" />
-                  <p className="text-xs font-bold text-success-green">
-                    Site Visit Confirmed!
-                  </p>
+                <div className="p-4 rounded-xl bg-success-green-light border border-success-green/30 text-center space-y-1">
+                  <CheckCircle2 className="w-6 h-6 text-success-green mx-auto" />
+                  <p className="text-xs font-bold text-success-green">Visit Requested!</p>
                   <p className="text-[11px] text-text-secondary">
-                    Our relationship manager will coordinate your visit on {visitDate} at {visitSlot}.
+                    The owner will confirm your appointment for {visitDate}.
                   </p>
                 </div>
               ) : (
-                <form onSubmit={handleBookVisit} className="space-y-3">
+                <form onSubmit={handleBookVisitSubmit} className="space-y-3">
                   <div>
                     <label className="text-xs font-medium text-text-secondary block mb-1">
                       Preferred Date
@@ -728,6 +781,7 @@ export default function PropertyDetailPage() {
                   <Button
                     type="submit"
                     variant="outline"
+                    isLoading={isBookingLoading}
                     className="w-full h-10 text-xs font-bold hover:border-primary-navy"
                   >
                     Book Free Site Visit
@@ -751,7 +805,7 @@ export default function PropertyDetailPage() {
                 </h3>
               </div>
 
-              <Link href={isRental ? "/rent" : "/buy"}>
+              <Link href={isRental ? "/rent" : "/properties"}>
                 <Button variant="outline" size="sm" className="text-xs font-bold">
                   View All &rarr;
                 </Button>
@@ -768,17 +822,11 @@ export default function PropertyDetailPage() {
       </Container>
 
       {/* Direct Contact Modal */}
-      {isRental && rentalItem ? (
-        <RentEnquiryModal
-          isOpen={isContactOpen}
-          onClose={() => setIsContactOpen(false)}
-          property={rentalItem}
-        />
-      ) : (
+      {backendProperty && (
         <ContactModal
           isOpen={isContactOpen}
           onClose={() => setIsContactOpen(false)}
-          property={rawProperty}
+          property={backendProperty}
         />
       )}
     </div>

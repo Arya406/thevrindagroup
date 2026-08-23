@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   AuthUser,
@@ -41,38 +41,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [session, setSession] = useState<AuthSession | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return authClient.getSession();
-    } catch {
-      return null;
-    }
-  });
+  const session = React.useSyncExternalStore(
+    (onStoreChange) => authClient.subscribe(onStoreChange),
+    () => authClient.getSession(),
+    () => null
+  );
 
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return authClient.getSession()?.user || null;
-    } catch {
-      return null;
-    }
-  });
+  const currentUser = session?.user || null;
 
   const [isLoading, setIsLoading] = useState(false);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalContext, setAuthModalContext] = useState<AuthModalContext | null>(null);
 
+  // Synchronize and verify session against backend /api/auth/me on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifyBackendSession = async () => {
+      const stored = authClient.getSession();
+      if (stored?.accessToken) {
+        const freshUser = await authClient.getCurrentUser();
+        if (isMounted && !freshUser) {
+          // Token expired or revoked
+          authClient.clearSession();
+        }
+      }
+    };
+    verifyBackendSession();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const login = useCallback(
     async (credentials: LoginCredentials): Promise<AuthResponse> => {
       setIsLoading(true);
       try {
         const res = await authClient.login(credentials);
-        if (res.success && res.session) {
-          setSession(res.session);
-          setCurrentUser(res.session.user);
-        }
         return res;
       } finally {
         setIsLoading(false);
@@ -86,10 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       try {
         const res = await authClient.register(data);
-        if (res.success && res.session) {
-          setSession(res.session);
-          setCurrentUser(res.session.user);
-        }
         return res;
       } finally {
         setIsLoading(false);
@@ -102,8 +104,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       await authClient.logout();
-      setSession(null);
-      setCurrentUser(null);
       router.push("/");
     } finally {
       setIsLoading(false);
@@ -111,12 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const updateUser = useCallback((data: Partial<AuthUser>) => {
-    setCurrentUser((prev) => {
-      if (!prev) return null;
-      const updated = { ...prev, ...data };
-      setSession((prevSess) => (prevSess ? { ...prevSess, user: updated } : null));
-      return updated;
-    });
+    const current = authClient.getSession();
+    if (current?.user) {
+      const updatedUser = { ...current.user, ...data };
+      authClient.saveSession({ ...current, user: updatedUser });
+    }
   }, []);
 
   const openAuthModal = useCallback((context: AuthModalContext) => {

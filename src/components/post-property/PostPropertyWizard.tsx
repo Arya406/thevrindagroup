@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, Save, Sparkles, Edit3 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, Sparkles, Edit3, AlertCircle } from "lucide-react";
 import { Button, Container } from "@/components/ui";
 import { PropertyListingDraft } from "@/types/postProperty";
-import { MOCK_MANAGED_PROPERTIES } from "@/data/account/mockAccountData";
 import { useAuth } from "@/lib/auth/auth-context";
+import { PropertyApiService, mapDraftToCreatePropertyDto } from "@/lib/services/property-api";
+import { ApiClientError } from "@/lib/api-client";
+import { Property } from "@/types/property";
 import { PostPropertyLanding } from "./PostPropertyLanding";
 import { StepProgress } from "./StepProgress";
 import { Step1PropertyType } from "./Step1PropertyType";
@@ -85,99 +87,19 @@ const INITIAL_DRAFT: PropertyListingDraft = {
   isConfirmed: false,
 };
 
-function getInitialDraft(editId: string | null): PropertyListingDraft {
-  if (editId) {
-    const found = MOCK_MANAGED_PROPERTIES.find((p) => p.id === editId);
-    if (found) {
-      const numericCarpet = found.carpetArea.replace(/[^0-9]/g, "") || "1450";
-      const bhkNum = found.bhk ? found.bhk.charAt(0) : "3";
-      return {
-        id: found.id,
-        currentStep: 1,
-        ownerType: "owner",
-        transaction: found.transactionType,
-        category: found.category,
-        residentialType: "apartment",
-        commercialType: "office",
-        location: {
-          city: found.city || "Bangalore",
-          locality: found.location.split(",")[0] || "Whitefield",
-          projectSociety: found.title,
-          landmark: "Near Metro Corridor",
-          address: found.location,
-        },
-        residentialDetails: {
-          bhk: bhkNum,
-          bathrooms: "2",
-          balconies: "1",
-          carpetArea: numericCarpet,
-          builtUpArea: String(Math.round(parseInt(numericCarpet) * 1.25)),
-          floor: "4th Floor",
-          totalFloors: "14",
-          propertyAge: "1-3 Years",
-          facing: "East",
-          furnishing: "Fully Furnished",
-          parking: "1 Covered",
-          possessionStatus: "Ready to Move",
-        },
-        commercialDetails: {
-          carpetArea: numericCarpet,
-          builtUpArea: String(Math.round(parseInt(numericCarpet) * 1.3)),
-          floor: "6th Floor",
-          totalFloors: "18",
-          propertyAge: "Brand New",
-          parking: "4 Dedicated Bays",
-          furnishing: "Fully Furnished",
-          possessionStatus: "Ready to Move",
-          hasConferenceRoom: true,
-          hasReception: true,
-          hasPantry: true,
-          hasPowerBackup: true,
-          hasCentralAc: true,
-          hasFireSafety: true,
-        },
-        photos: [
-          {
-            id: `photo-edit-${found.id}`,
-            url: found.image,
-            name: `${found.title.replace(/\s+/g, "_")}.jpg`,
-            isCover: true,
-          },
-        ],
-        pricing: {
-          expectedPrice: found.transactionType === "sale" ? String(found.price) : "",
-          isPriceNegotiable: true,
-          monthlyRent: found.transactionType === "rent" ? String(found.price) : "",
-          securityDeposit: found.transactionType === "rent" ? String(found.price * 5) : "",
-          maintenanceCharges: "3500",
-          availableFrom: "Immediate",
-          leaseDuration: "3 Years",
-        },
-        amenities: [
-          "Reserved Parking",
-          "High-speed Lift",
-          "24x7 Multi-tier Security",
-          "100% Power Backup",
-        ],
-        description: `Exclusive listing: ${found.title} located at ${found.location}. Features premium fittings, excellent natural light, and state-of-the-art society amenities.`,
-        isConfirmed: true,
-      };
-    }
-  }
-  return INITIAL_DRAFT;
-}
-
 export function PostPropertyWizard() {
   const { requireAuth } = useAuth();
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
 
-  const [draft, setDraft] = useState<PropertyListingDraft>(() => getInitialDraft(editId));
+  const [draft, setDraft] = useState<PropertyListingDraft>(INITIAL_DRAFT);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [savedToast, setSavedToast] = useState<string | null>(null);
-  const [isEditMode] = useState<boolean>(() =>
-    Boolean(editId && MOCK_MANAGED_PROPERTIES.some((p) => p.id === editId))
-  );
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [createdProperty, setCreatedProperty] = useState<Property | null>(null);
+  const [isLivePublished, setIsLivePublished] = useState(false);
+
+  const [isEditMode, setIsEditMode] = useState<boolean>(() => Boolean(editId));
   const [hasSavedDraft, setHasSavedDraft] = useState<boolean>(() => {
     if (typeof window === "undefined" || editId) return false;
     try {
@@ -192,6 +114,42 @@ export function PostPropertyWizard() {
     return false;
   });
   const [isPublishing, setIsPublishing] = useState(false);
+
+  // Fetch real property if editId is provided
+  useEffect(() => {
+    if (editId) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editId);
+      if (isUuid) {
+        PropertyApiService.getPropertyById(editId)
+          .then((p) => {
+            if (p) {
+              setIsEditMode(true);
+              setDraft((prev) => ({
+                ...prev,
+                id: p.id,
+                transaction: p.listingType === "rent" ? "rent" : "sale",
+                category: p.propertyType === "apartment" || p.propertyType === "villa" ? "residential" : "commercial",
+                location: {
+                  ...prev.location,
+                  city: p.city || "Bangalore",
+                  locality: p.location || "",
+                  projectSociety: p.title || "",
+                  address: p.location || "",
+                },
+                pricing: {
+                  ...prev.pricing,
+                  expectedPrice: String(p.price || ""),
+                },
+                description: p.description || "",
+              }));
+            }
+          })
+          .catch(() => {
+            // Handled gracefully
+          });
+      }
+    }
+  }, [editId]);
 
   // Save to localStorage whenever draft changes
   useEffect(() => {
@@ -323,18 +281,109 @@ export function PostPropertyWizard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const executePublish = () => {
+  // Real Backend Property Creation Flow
+  const executePublish = async () => {
     setIsPublishing(true);
-    setTimeout(() => {
-      setIsPublishing(false);
+    setPublishError(null);
+
+    try {
+      // 1. Convert form state to typed backend DTO
+      const createDto = mapDraftToCreatePropertyDto(draft);
+
+      // 2. Create Property in PostgreSQL (status: DRAFT)
+      const property = await PropertyApiService.createProperty(createDto);
+      setCreatedProperty(property);
+
+      // 3. Attach uploaded photos: handle both new binary File uploads and existing remote URLs
+      let attachedImagesCount = 0;
+
+      if (draft.photos && draft.photos.length > 0) {
+        for (let i = 0; i < draft.photos.length; i++) {
+          const photo = draft.photos[i];
+          const isPrimary =
+            photo.isCover || (i === 0 && !draft.photos.some((p) => p.isCover));
+
+          if (photo.file) {
+            // Real local binary file upload via multipart endpoint
+            try {
+              await PropertyApiService.uploadPropertyImage(property.id, photo.file, {
+                isPrimary,
+              });
+              attachedImagesCount++;
+            } catch (uploadErr) {
+              console.warn("[PostPropertyWizard] Image upload error:", uploadErr);
+            }
+          } else if (photo.url && /^https?:\/\//i.test(photo.url)) {
+            // Preset / remote URL attach
+            try {
+              await PropertyApiService.addPropertyImage(property.id, {
+                url: photo.url,
+                altText: photo.name || `${property.title} Image ${i + 1}`,
+                displayOrder: i,
+                isPrimary,
+              });
+              attachedImagesCount++;
+            } catch (attachErr) {
+              console.warn("[PostPropertyWizard] Image URL attach error:", attachErr);
+            }
+          }
+        }
+      }
+
+      // 4. Transition status to PUBLISHED if images exist and meet publishing criteria
+      if (attachedImagesCount > 0) {
+        try {
+          const published = await PropertyApiService.publishProperty(property.id);
+          setCreatedProperty(published);
+          setIsLivePublished(true);
+        } catch {
+          // If publishing failed, property remains in DRAFT
+          setIsLivePublished(false);
+        }
+      } else {
+        setIsLivePublished(false);
+      }
+
+      // 5. Clean up localStorage draft
       try {
         localStorage.removeItem(STORAGE_KEY);
       } catch {
         // ignore
       }
-      setDraft((prev) => ({ ...prev, currentStep: 8, submittedAt: new Date().toISOString() }));
+
+      // 6. Transition to Step 8 (Success Screen)
+      setDraft((prev) => ({
+        ...prev,
+        id: property.referenceCode || property.id,
+        currentStep: 8,
+        submittedAt: new Date().toISOString(),
+      }));
+
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 600);
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        if (err.statusCode === 401) {
+          setPublishError("Your session has expired. Please sign in again to publish your listing.");
+        } else if (err.statusCode === 403) {
+          setPublishError("Only registered Owners and Certified Agents have permission to list properties.");
+        } else if (err.statusCode === 409) {
+          setPublishError("A property with this identical title or reference code already exists.");
+        } else if (Array.isArray(err.details) && err.details.length > 0) {
+          const firstDetail = err.details[0] as { message?: string };
+          setPublishError(firstDetail?.message || err.message);
+        } else {
+          setPublishError(err.message || "Failed to create property on backend.");
+        }
+      } else {
+        setPublishError(
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred while connecting to the property server. Please try again."
+        );
+      }
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const handlePublish = () => {
@@ -355,6 +404,9 @@ export function PostPropertyWizard() {
   };
 
   const handlePostAnother = () => {
+    setCreatedProperty(null);
+    setIsLivePublished(false);
+    setPublishError(null);
     setDraft({
       ...INITIAL_DRAFT,
       id: `PP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -379,7 +431,10 @@ export function PostPropertyWizard() {
             <div className="flex items-center gap-2.5">
               <Edit3 className="w-4 h-4 text-[#9E6E18]" />
               <span className="text-xs sm:text-sm font-bold text-primary-navy">
-                Editing Property Listing: <span className="text-text-primary font-semibold">{draft.location.projectSociety || draft.id}</span>
+                Editing Property Listing:{" "}
+                <span className="text-text-primary font-semibold">
+                  {draft.location.projectSociety || draft.id}
+                </span>
               </span>
             </div>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary-navy text-white">
@@ -438,6 +493,17 @@ export function PostPropertyWizard() {
               currentStep={draft.currentStep}
               onStepClick={(s) => setDraft((p) => ({ ...p, currentStep: s }))}
             />
+
+            {/* Error Banner on Step 7 if submission failed */}
+            {publishError && draft.currentStep === 7 && (
+              <div className="rounded-xl bg-error-red-light/60 border border-error-red/30 p-4 text-xs flex items-center gap-3 text-error-red">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <div className="space-y-0.5">
+                  <strong className="font-bold">Submission Error:</strong>
+                  <p>{publishError}</p>
+                </div>
+              </div>
+            )}
 
             {/* Main Form White Card */}
             <div className="rounded-2xl border border-border-default bg-white p-5 sm:p-8 shadow-soft space-y-6">
@@ -554,6 +620,10 @@ export function PostPropertyWizard() {
         {draft.currentStep === 8 && (
           <PublishSuccess
             draft={draft}
+            createdPropertyId={createdProperty?.id}
+            createdPropertySlug={createdProperty?.slug}
+            createdReferenceCode={createdProperty?.referenceCode}
+            isLivePublished={isLivePublished}
             onPostAnother={handlePostAnother}
           />
         )}

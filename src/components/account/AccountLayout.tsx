@@ -17,8 +17,6 @@ import {
 } from "lucide-react";
 import { Button, Container } from "@/components/ui";
 import { useAuth } from "@/lib/auth/auth-context";
-import { MOCK_ACCOUNT_STATS } from "@/data/account/mockAccountData";
-
 export interface AccountLayoutProps {
   children: React.ReactNode;
 }
@@ -45,21 +43,21 @@ export function AccountLayout({ children }: AccountLayoutProps) {
       label: "My Properties",
       href: "/account/properties",
       icon: Building,
-      badge: MOCK_ACCOUNT_STATS.activeListings + MOCK_ACCOUNT_STATS.pendingReview,
+      badge: null,
       badgeColor: "bg-primary-navy/10 text-primary-navy",
     },
     {
       label: "Leads & Enquiries",
       href: "/account/leads",
       icon: Users,
-      badge: "2 New",
+      badge: null,
       badgeColor: "bg-success-green-light text-success-green border border-success-green-border",
     },
     {
       label: "Scheduled Visits",
       href: "/account/visits",
       icon: CalendarCheck,
-      badge: MOCK_ACCOUNT_STATS.upcomingVisits,
+      badge: null,
       badgeColor: "bg-accent-gold-light text-[#9E6E18] border border-accent-gold-muted",
     },
     {

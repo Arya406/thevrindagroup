@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,8 +9,10 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
+  RotateCcw,
 } from "lucide-react";
-import { Container } from "@/components/ui";
+import { Container, Button } from "@/components/ui";
 import { PropertySearchBar } from "@/components/marketplace/PropertySearchBar";
 import { FilterSidebar, FilterState } from "@/components/marketplace/FilterSidebar";
 import { MobileFilterModal } from "@/components/marketplace/MobileFilterModal";
@@ -20,8 +22,8 @@ import { PropertyListCard } from "@/components/marketplace/PropertyListCard";
 import { SortDropdown, SortOption } from "@/components/marketplace/SortDropdown";
 import { EmptyResults } from "@/components/marketplace/EmptyResults";
 import { PropertySkeleton } from "@/components/marketplace/PropertySkeleton";
-import { MOCK_PROPERTIES } from "@/data/mockProperties";
-import { ListingType } from "@/types/property";
+import { Property, ListingType } from "@/types/property";
+import { PropertyApiService, BackendPagination } from "@/lib/services/property-api";
 
 export interface PropertyListingsViewProps {
   defaultListingType?: ListingType;
@@ -39,7 +41,7 @@ const INITIAL_FILTERS: FilterState = {
   amenities: [],
 };
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 9;
 
 function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsViewProps) {
   const searchParams = useSearchParams();
@@ -72,7 +74,19 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
   const [sortOption, setSortOption] = useState<SortOption>(sortParam);
   const [currentPage, setCurrentPage] = useState(1);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Backend Data State
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [pagination, setPagination] = useState<BackendPagination>({
+    page: 1,
+    limit: ITEMS_PER_PAGE,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Sync state to URL params cleanly
   const syncToUrl = useCallback(
@@ -117,122 +131,68 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
     [searchParams, pathname, router]
   );
 
-  // Filter and Sort Processing
-  const filteredProperties = useMemo(() => {
-    return MOCK_PROPERTIES.filter((p) => {
-      // 1. Listing Type
-      if (listingType !== "buy" && p.listingType !== listingType) return false;
+  // Real Backend Data Fetcher Effect with unmount safety
+  useEffect(() => {
+    let isMounted = true;
+    const fetchListings = async () => {
+      setIsLoading(true);
+      setFetchError(null);
 
-      // 2. Location
-      if (locationQuery) {
-        const query = locationQuery.toLowerCase();
-        const matchesLoc =
-          p.city.toLowerCase().includes(query) ||
-          p.location.toLowerCase().includes(query) ||
-          p.title.toLowerCase().includes(query) ||
-          p.address.toLowerCase().includes(query);
-        if (!matchesLoc) return false;
-      }
+      try {
+        const activePropertyType =
+          propertyType !== "all"
+            ? propertyType
+            : filters.propertyTypes.length > 0
+            ? filters.propertyTypes[0]
+            : undefined;
 
-      // 3. Property Type from searchbar or sidebar
-      if (propertyType !== "all" && p.propertyType !== propertyType) return false;
-      if (
-        filters.propertyTypes.length > 0 &&
-        !filters.propertyTypes.includes(p.propertyType)
-      ) {
-        return false;
-      }
+        const activeBhk =
+          bhk !== "any"
+            ? bhk
+            : filters.bhkList.length > 0
+            ? filters.bhkList[0]
+            : undefined;
 
-      // 4. BHK from searchbar or sidebar
-      if (bhk !== "any" && String(p.bhk) !== bhk) return false;
-      if (
-        filters.bhkList.length > 0 &&
-        !filters.bhkList.includes(String(p.bhk))
-      ) {
-        return false;
-      }
+        const activeBudget =
+          filters.budgetRange !== "any" ? filters.budgetRange : budget;
 
-      // 5. Budget Range
-      const effectiveBudget =
-        filters.budgetRange !== "any" ? filters.budgetRange : budget;
-      if (effectiveBudget === "under-50l" && p.priceNumeric > 5000000) return false;
-      if (
-        effectiveBudget === "50l-1cr" &&
-        (p.priceNumeric < 5000000 || p.priceNumeric > 10000000)
-      )
-        return false;
-      if (
-        effectiveBudget === "1cr-2.5cr" &&
-        (p.priceNumeric < 10000000 || p.priceNumeric > 25000000)
-      )
-        return false;
-      if (
-        effectiveBudget === "2.5cr-5cr" &&
-        (p.priceNumeric < 25000000 || p.priceNumeric > 50000000)
-      )
-        return false;
-      if (effectiveBudget === "above-5cr" && p.priceNumeric < 50000000)
-        return false;
+        const res = await PropertyApiService.getProperties({
+          search: locationQuery || undefined,
+          listingType,
+          propertyType: activePropertyType,
+          city: filters.city !== "All" ? filters.city : undefined,
+          budget: activeBudget,
+          bhk: activeBhk,
+          furnishingStatus: filters.furnishingStatus[0] || undefined,
+          sort: sortOption,
+          page: currentPage,
+          limit: ITEMS_PER_PAGE,
+        });
 
-      // 6. RERA Verified Only
-      if (filters.isReraOnly && !p.isReraVerified) return false;
+        if (isMounted) {
+          setProperties(res.properties);
+          setPagination(res.pagination);
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : "Failed to connect to property server. Please ensure the backend is running.";
+          setFetchError(msg);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
 
-      // 7. Possession Status
-      if (
-        filters.possessionStatus.length > 0 &&
-        !filters.possessionStatus.includes(p.possessionStatus)
-      ) {
-        return false;
-      }
+    fetchListings();
 
-      // 8. Listed By (Seller Type)
-      if (
-        filters.sellerTypes.length > 0 &&
-        !filters.sellerTypes.includes(p.sellerType)
-      ) {
-        return false;
-      }
-
-      // 9. Furnishing
-      if (
-        filters.furnishingStatus.length > 0 &&
-        !filters.furnishingStatus.includes(p.furnishingStatus)
-      ) {
-        return false;
-      }
-
-      // 10. Amenities
-      if (filters.amenities.length > 0) {
-        const hasAllAmenities = filters.amenities.every((a) =>
-          p.amenities.includes(a)
-        );
-        if (!hasAllAmenities) return false;
-      }
-
-      return true;
-    }).sort((a, b) => {
-      if (sortOption === "newest") {
-        return b.id.localeCompare(a.id);
-      }
-      if (sortOption === "price-asc") {
-        return a.priceNumeric - b.priceNumeric;
-      }
-      if (sortOption === "price-desc") {
-        return b.priceNumeric - a.priceNumeric;
-      }
-      if (sortOption === "area-asc") {
-        const aArea = parseInt(a.carpetArea.replace(/[^0-9]/g, "")) || 0;
-        const bArea = parseInt(b.carpetArea.replace(/[^0-9]/g, "")) || 0;
-        return aArea - bArea;
-      }
-      if (sortOption === "area-desc") {
-        const aArea = parseInt(a.carpetArea.replace(/[^0-9]/g, "")) || 0;
-        const bArea = parseInt(b.carpetArea.replace(/[^0-9]/g, "")) || 0;
-        return bArea - aArea;
-      }
-      // recommended default
-      return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
-    });
+    return () => {
+      isMounted = false;
+    };
   }, [
     listingType,
     locationQuery,
@@ -241,7 +201,35 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
     bhk,
     filters,
     sortOption,
+    currentPage,
   ]);
+
+  const handleManualRetry = () => {
+    setCurrentPage(1);
+    setIsLoading(true);
+    setFetchError(null);
+    PropertyApiService.getProperties({
+      search: locationQuery || undefined,
+      listingType,
+      sort: sortOption,
+      page: 1,
+      limit: ITEMS_PER_PAGE,
+    })
+      .then((res) => {
+        setProperties(res.properties);
+        setPagination(res.pagination);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Failed to connect to property server. Please ensure the backend is running.";
+        setFetchError(msg);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
 
   // Construct Active Filter Chips
   const activeFilterList: ActiveFilterItem[] = useMemo(() => {
@@ -383,7 +371,6 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
   };
 
   const handleSearchSubmit = () => {
-    setIsLoading(true);
     setCurrentPage(1);
     syncToUrl({
       city: locationQuery,
@@ -392,15 +379,9 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
       budget,
       type: listingType,
     });
-    setTimeout(() => setIsLoading(false), 200);
   };
 
-  // Pagination Slice
-  const totalPages = Math.ceil(filteredProperties.length / ITEMS_PER_PAGE) || 1;
-  const paginatedProperties = filteredProperties.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const totalPages = pagination.totalPages || 1;
 
   return (
     <div className="py-6 sm:py-8 bg-bg-light min-h-screen font-sans text-text-primary">
@@ -435,7 +416,7 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
           onListingTypeChange={(t) => {
             setListingType(t);
             syncToUrl({ type: t });
-            handleSearchSubmit();
+            setCurrentPage(1);
           }}
           location={locationQuery}
           onLocationChange={setLocationQuery}
@@ -443,23 +424,26 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
           onPropertyTypeChange={(p) => {
             setPropertyType(p);
             syncToUrl({ propertyType: p });
+            setCurrentPage(1);
           }}
           budget={budget}
           onBudgetChange={(b) => {
             setBudget(b);
             syncToUrl({ budget: b });
+            setCurrentPage(1);
           }}
           bhk={bhk}
           onBhkChange={(b) => {
             setBhk(b);
             syncToUrl({ bhk: b });
+            setCurrentPage(1);
           }}
           onSearchSubmit={handleSearchSubmit}
         />
 
         {/* Main Content: Sidebar + Results */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* LEFT: Desktop Filter Sidebar (3 cols ~ 280-320px) */}
+          {/* LEFT: Desktop Filter Sidebar */}
           <div className="hidden lg:block lg:col-span-3 sticky top-24">
             <FilterSidebar
               filters={filters}
@@ -471,7 +455,7 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
             />
           </div>
 
-          {/* RIGHT: Results Area (9 cols) */}
+          {/* RIGHT: Results Area */}
           <div className="lg:col-span-9 space-y-4">
             {/* Results Header Bar: Controls, Sort, View Toggle */}
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-border-default shadow-soft-xs">
@@ -502,7 +486,7 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
                     : "Commercial Spaces for Lease & Sale"}
                 </h1>
                 <p className="text-xs text-text-secondary">
-                  <strong className="text-primary-navy font-bold">{filteredProperties.length}</strong> listings found with 100% verified seller details
+                  <strong className="text-primary-navy font-bold">{pagination.total}</strong> listings found from verified PostgreSQL records
                 </p>
               </div>
 
@@ -513,6 +497,7 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
                   onChange={(s) => {
                     setSortOption(s);
                     syncToUrl({ sort: s });
+                    setCurrentPage(1);
                   }}
                 />
 
@@ -551,24 +536,44 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
             {/* Active Filters Chips */}
             <ActiveFilters
               filters={activeFilterList}
-              totalCount={filteredProperties.length}
+              totalCount={pagination.total}
               onClearAll={handleClearAll}
             />
+
+            {/* Error State with Retry */}
+            {fetchError && !isLoading && (
+              <div className="p-6 rounded-2xl bg-error-red-light/40 border border-error-red/20 text-center space-y-3">
+                <div className="w-10 h-10 rounded-full bg-error-red/10 text-error-red flex items-center justify-center mx-auto">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-bold text-primary-navy">Unable to Load Properties</h3>
+                <p className="text-xs text-text-secondary max-w-md mx-auto">{fetchError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManualRetry}
+                  leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                  className="mx-auto text-xs"
+                >
+                  Retry Connection
+                </Button>
+              </div>
+            )}
 
             {/* Properties Result Grid / List */}
             {isLoading ? (
               <PropertySkeleton viewMode={viewMode} count={ITEMS_PER_PAGE} />
-            ) : filteredProperties.length > 0 ? (
+            ) : !fetchError && properties.length > 0 ? (
               <>
                 {viewMode === "grid" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
-                    {paginatedProperties.map((property) => (
+                    {properties.map((property) => (
                       <PropertyCard key={property.id} property={property} />
                     ))}
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {paginatedProperties.map((property) => (
+                    {properties.map((property) => (
                       <PropertyListCard
                         key={property.id}
                         property={property}
@@ -582,11 +587,8 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
                   <div className="flex items-center justify-between border-t border-border-default pt-6 text-xs">
                     <p className="text-text-secondary">
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
-                      {Math.min(
-                        currentPage * ITEMS_PER_PAGE,
-                        filteredProperties.length
-                      )}{" "}
-                      of {filteredProperties.length} Properties
+                      {Math.min(currentPage * ITEMS_PER_PAGE, pagination.total)}{" "}
+                      of {pagination.total} Properties
                     </p>
 
                     <div className="flex items-center gap-1.5">
@@ -632,12 +634,11 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
                   </div>
                 )}
               </>
-            ) : (
+            ) : !fetchError ? (
               <EmptyResults
                 onClearFilters={handleClearAll}
-                recommendedProperties={MOCK_PROPERTIES.slice(0, 3)}
               />
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -651,7 +652,7 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
             setCurrentPage(1);
           }}
           onClearAll={handleClearAll}
-          matchingCount={filteredProperties.length}
+          matchingCount={pagination.total}
         />
       </Container>
     </div>

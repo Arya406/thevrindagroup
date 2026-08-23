@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Calendar, Clock, CheckCircle2, ShieldCheck, Building2 } from "lucide-react";
+import { X, Calendar, Clock, CheckCircle2, ShieldCheck, Building2, AlertCircle } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { CommercialProperty, CommercialVisitRequest } from "@/types/commercial";
+import { useAuth } from "@/lib/auth/auth-context";
+import { SiteVisitApiService } from "@/lib/services/site-visit-api";
 
 export interface ScheduleCommercialVisitModalProps {
   isOpen: boolean;
@@ -16,34 +18,88 @@ export function ScheduleCommercialVisitModal({
   onClose,
   property,
 }: ScheduleCommercialVisitModalProps) {
+  const { currentUser, isAuthenticated, requireAuth } = useAuth();
   const [date, setDate] = useState("");
   const [timeSlot, setTimeSlot] = useState<CommercialVisitRequest["preferredSlot"]>(
     "Morning (09:00 AM - 12:00 PM)"
   );
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(currentUser?.name || "");
+  const [phone, setPhone] = useState(currentUser?.phone || "");
   const [companyName, setCompanyName] = useState("");
   const [notes, setNotes] = useState("");
   const [isBooked, setIsBooked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const executeSubmit = async () => {
+    if (!date || !name || !phone || isLoading) return;
+    setIsLoading(true);
+    setError(null);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(property.id);
+    if (isUuid) {
+      try {
+        let hour = 10;
+        if (timeSlot.startsWith("Afternoon")) hour = 14;
+        else if (timeSlot.startsWith("Evening")) hour = 17;
+
+        const scheduledDate = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00.000Z`);
+        const targetIso = scheduledDate.toISOString();
+
+        const buyerNote = [
+          companyName ? `Company: ${companyName}` : null,
+          `Delegate: ${name} (${phone})`,
+          `Time window: ${timeSlot}`,
+          notes ? `Requirements: ${notes}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        await SiteVisitApiService.createSiteVisit(property.id, {
+          scheduledAt: targetIso,
+          buyerNote,
+        });
+
+        setIsBooked(true);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Unable to schedule site inspection.";
+        setError(msg);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setIsLoading(false);
+      setIsBooked(true);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!date || !name || !phone) {
-      alert("Please select a date and enter your name and phone number.");
+      setError("Please select an inspection date and enter your contact details.");
       return;
     }
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsBooked(true);
-    }, 400);
+
+    if (!isAuthenticated) {
+      const allowed = requireAuth({
+        title: "Sign in to schedule a site tour",
+        message: "Sign in to confirm VIP commercial asset inspections and receive verified floor plans.",
+        onAuthenticated: () => executeSubmit(),
+      });
+      if (allowed) {
+        executeSubmit();
+      }
+      return;
+    }
+
+    executeSubmit();
   };
 
   const handleReset = () => {
     setIsBooked(false);
+    setError(null);
     onClose();
   };
 
@@ -112,6 +168,14 @@ export function ScheduleCommercialVisitModal({
                 {property.location} • {property.carpetArea} • {property.priceFormatted}
               </p>
             </div>
+
+            {/* Error Banner */}
+            {error && (
+              <div className="p-3 rounded-xl bg-error-red-light border border-error-red/30 text-xs text-error-red flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-3.5">
