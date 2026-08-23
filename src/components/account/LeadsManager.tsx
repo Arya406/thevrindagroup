@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Users,
   Search,
@@ -17,8 +18,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { Lead, LeadStatus, LeadEnquiryType } from "@/types/account";
-import { MOCK_LEADS, MOCK_MANAGED_PROPERTIES } from "@/data/account/mockAccountData";
 import { EmptyState } from "./EmptyState";
+import { useAuth } from "@/lib/auth/auth-context";
+import { EnquiryApiService, BackendPropertyEnquiry, BackendEnquiryStatus } from "@/lib/services/enquiry-api";
 
 const LEAD_STATUS_OPTIONS: LeadStatus[] = [
   "NEW",
@@ -38,8 +40,41 @@ const ENQUIRY_TYPES: LeadEnquiryType[] = [
   "Request Floor Plan",
 ];
 
+function mapBackendEnquiryToLead(enq: BackendPropertyEnquiry): Lead {
+  let status: LeadStatus = "NEW";
+  if (enq.status === "CONTACTED") status = "CONTACTED";
+  else if (enq.status === "INTERESTED") status = "INTERESTED";
+  else if (enq.status === "SITE_VISIT_SCHEDULED") status = "SITE VISIT";
+  else if (enq.status === "CLOSED") status = "CLOSED";
+  else if (enq.status === "NOT_INTERESTED") status = "NOT INTERESTED";
+
+  return {
+    id: enq.id,
+    name: enq.buyer?.name || "Verified Seeker",
+    email: enq.buyer?.email || "seeker@thevrindagroup.com",
+    phone: enq.buyer?.phone || "+91 98765 43210",
+    propertyId: enq.propertyId,
+    propertyTitle: enq.property.title,
+    propertyLocation: enq.property.location
+      ? `${enq.property.location.locality}, ${enq.property.location.city}`
+      : "Bangalore",
+    enquiryType: "Request Callback",
+    message: enq.message || "I am interested in this property. Please share more details.",
+    status,
+    createdAt: new Date(enq.createdAt).toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+  };
+}
+
 export function LeadsManager() {
-  const [leads, setLeads] = useState<Lead[]>(MOCK_LEADS);
+  const { isAuthenticated } = useAuth();
+  const searchParams = useSearchParams();
+  const targetId = searchParams?.get("id");
+
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -47,21 +82,66 @@ export function LeadsManager() {
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [actionToast, setActionToast] = useState<string | null>(null);
 
+  // Fetch real user enquiries if authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      EnquiryApiService.getMyEnquiries()
+        .then((res) => {
+          if (res.enquiries) {
+            const mapped = res.enquiries.map(mapBackendEnquiryToLead);
+            setLeads(mapped);
+            if (targetId) {
+              const match = mapped.find((l) => l.id === targetId);
+              if (match) {
+                setSelectedLead(match);
+              }
+            }
+          }
+        })
+        .catch(() => {
+          // Handled gracefully
+        });
+    }
+  }, [isAuthenticated, targetId]);
+
   const showToast = (msg: string) => {
     setActionToast(msg);
     setTimeout(() => setActionToast(null), 3000);
   };
 
   // Status Change Handler
-  const handleUpdateStatus = (leadId: string, nextStatus: LeadStatus) => {
+  const handleUpdateStatus = async (leadId: string, nextStatus: LeadStatus) => {
     setLeads((prev) =>
       prev.map((l) => (l.id === leadId ? { ...l, status: nextStatus } : l))
     );
     if (selectedLead && selectedLead.id === leadId) {
       setSelectedLead((prev) => (prev ? { ...prev, status: nextStatus } : null));
     }
+
+    // If real UUID, trigger backend status update
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leadId);
+    if (isUuid) {
+      let backendStatus: BackendEnquiryStatus = "NEW";
+      if (nextStatus === "CONTACTED") backendStatus = "CONTACTED";
+      else if (nextStatus === "INTERESTED") backendStatus = "INTERESTED";
+      else if (nextStatus === "SITE VISIT") backendStatus = "SITE_VISIT_SCHEDULED";
+      else if (nextStatus === "CLOSED") backendStatus = "CLOSED";
+      else if (nextStatus === "NOT INTERESTED") backendStatus = "NOT_INTERESTED";
+
+      try {
+        await EnquiryApiService.updateEnquiryStatus(leadId, backendStatus);
+      } catch {
+        // Handled silently
+      }
+    }
+
     showToast(`Lead status updated to ${nextStatus}.`);
   };
+
+  // Unique properties from user leads
+  const uniqueProperties = Array.from(
+    new Map(leads.map((l) => [l.propertyId, { id: l.propertyId, title: l.propertyTitle }])).values()
+  );
 
   // Filtered Leads
   const filteredLeads = leads.filter((lead) => {
@@ -200,8 +280,8 @@ export function LeadsManager() {
               onChange={(e) => setPropertyFilter(e.target.value)}
               className="w-full h-9 px-3 rounded-lg border border-border-default bg-white text-xs font-medium text-text-primary focus:border-accent-gold focus:outline-none cursor-pointer truncate"
             >
-              <option value="ALL">All Properties ({MOCK_MANAGED_PROPERTIES.length})</option>
-              {MOCK_MANAGED_PROPERTIES.map((p) => (
+              <option value="ALL">All Properties ({uniqueProperties.length})</option>
+              {uniqueProperties.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.title}
                 </option>

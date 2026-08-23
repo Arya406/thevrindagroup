@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -16,9 +16,13 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Briefcase,
+  Bell,
 } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { useAuth } from "@/lib/auth/auth-context";
+import { NotificationApiService } from "@/lib/services/notification-api";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 export interface NavItem {
   label: string;
@@ -35,10 +39,36 @@ const navItems: NavItem[] = [
 ];
 
 export function Navbar() {
+  const { currentUser, isAuthenticated, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const { currentUser, isAuthenticated, logout } = useAuth();
+  // Synchronize unread count on auth change & start 45s interval
+  useEffect(() => {
+    let ignore = false;
+    if (!isAuthenticated || !currentUser) return;
+
+    NotificationApiService.getUnreadCount()
+      .then((res) => {
+        if (!ignore) setUnreadCount(res.count);
+      })
+      .catch(() => {});
+
+    const interval = setInterval(() => {
+      NotificationApiService.getUnreadCount()
+        .then((res) => {
+          if (!ignore) setUnreadCount(res.count);
+        })
+        .catch(() => {});
+    }, 45000);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, currentUser]);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
@@ -50,7 +80,9 @@ export function Navbar() {
 
   const handleLogout = async () => {
     setIsUserMenuOpen(false);
+    setIsNotificationsOpen(false);
     closeMobileMenu();
+    setUnreadCount(0);
     await logout();
   };
 
@@ -97,49 +129,85 @@ export function Navbar() {
             ))}
           </nav>
 
-          {/* RIGHT: Actions (Auth State & Post Property) */}
+          {/* RIGHT: Actions (Auth State, Notifications & Post Property) */}
           <div className="hidden md:flex items-center gap-3">
             {isAuthenticated && currentUser ? (
-              /* Authenticated User Menu Dropdown */
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-default bg-white hover:bg-bg-light transition-all cursor-pointer shadow-soft-xs"
-                >
-                  <div className="relative w-7 h-7 rounded-full overflow-hidden border border-accent-gold/40 shrink-0 bg-primary-navy text-accent-gold flex items-center justify-center text-xs font-bold">
-                    {currentUser.avatar ? (
-                      <Image
-                        src={currentUser.avatar}
-                        alt={currentUser.name}
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      currentUser.name.charAt(0).toUpperCase()
-                    )}
-                  </div>
-                  <span className="text-xs font-bold text-primary-navy max-w-[100px] truncate">
-                    {currentUser.name.split(" ")[0]}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-text-muted" />
-                </button>
-
-                {/* Dropdown Menu */}
-                {isUserMenuOpen && (
-                  <div className="absolute right-0 top-11 w-56 rounded-2xl bg-white border border-border-default shadow-soft-xl z-50 p-2 space-y-1 animate-in fade-in duration-150">
-                    <div className="p-2.5 border-b border-border-subtle mb-1">
-                      <p className="text-xs font-bold text-primary-navy truncate flex items-center gap-1">
-                        {currentUser.name}
-                        <ShieldCheck className="w-3.5 h-3.5 text-accent-gold" />
-                      </p>
-                      <p className="text-[10px] text-text-muted truncate">
-                        {currentUser.email}
-                      </p>
-                      <span className="inline-block text-[9px] font-bold px-1.5 py-0.2 rounded bg-bg-light border border-border-subtle text-text-secondary mt-1 uppercase">
-                        {currentUser.role} Account
+              <>
+                {/* Notification Bell Dropdown Trigger */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNotificationsOpen(!isNotificationsOpen);
+                      setIsUserMenuOpen(false);
+                    }}
+                    className={`relative p-2 rounded-xl border transition-all cursor-pointer shadow-soft-xs ${
+                      isNotificationsOpen
+                        ? "border-accent-gold bg-accent-gold/10 text-primary-navy ring-2 ring-accent-gold/20"
+                        : "border-border-default bg-white text-text-secondary hover:text-primary-navy hover:bg-bg-light"
+                    }`}
+                    aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
+                    aria-expanded={isNotificationsOpen}
+                  >
+                    <Bell className="w-4 h-4" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-accent-gold text-dark-navy text-[10px] font-black flex items-center justify-center border-2 border-white shadow-soft-xs">
+                        {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
+                    )}
+                  </button>
+
+                  <NotificationCenter
+                    isOpen={isNotificationsOpen}
+                    onClose={() => setIsNotificationsOpen(false)}
+                    unreadCount={unreadCount}
+                    onUnreadCountChange={setUnreadCount}
+                  />
+                </div>
+
+                {/* Authenticated User Menu Dropdown */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(!isUserMenuOpen);
+                      setIsNotificationsOpen(false);
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-default bg-white hover:bg-bg-light transition-all cursor-pointer shadow-soft-xs"
+                  >
+                    <div className="relative w-7 h-7 rounded-full overflow-hidden border border-accent-gold/40 shrink-0 bg-primary-navy text-accent-gold flex items-center justify-center text-xs font-bold">
+                      {currentUser.avatar ? (
+                        <Image
+                          src={currentUser.avatar}
+                          alt={currentUser.name}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        currentUser.name.charAt(0).toUpperCase()
+                      )}
                     </div>
+                    <span className="text-xs font-bold text-primary-navy max-w-[100px] truncate">
+                      {currentUser.name.split(" ")[0]}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-text-muted" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 top-11 w-56 rounded-2xl bg-white border border-border-default shadow-soft-xl z-50 p-2 space-y-1 animate-in fade-in duration-150">
+                      <div className="p-2.5 border-b border-border-subtle mb-1">
+                        <p className="text-xs font-bold text-primary-navy truncate flex items-center gap-1">
+                          {currentUser.name}
+                          <ShieldCheck className="w-3.5 h-3.5 text-accent-gold" />
+                        </p>
+                        <p className="text-[10px] text-text-muted truncate">
+                          {currentUser.email}
+                        </p>
+                        <span className="inline-block text-[9px] font-bold px-1.5 py-0.2 rounded bg-bg-light border border-border-subtle text-text-secondary mt-1 uppercase">
+                          {currentUser.role} Account
+                        </span>
+                      </div>
 
                     <Link
                       href="/account"
@@ -186,6 +254,28 @@ export function Navbar() {
                       <span>Profile Settings</span>
                     </Link>
 
+                    {currentUser.role === "ADMIN" && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-accent-gold-hover bg-accent-gold/10 hover:bg-accent-gold/20 rounded-xl transition-colors"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-accent-gold" />
+                        <span>Admin Portal</span>
+                      </Link>
+                    )}
+
+                    {(currentUser.role === "AGENT" || currentUser.role === "ADMIN") && (
+                      <Link
+                        href="/agent"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors"
+                      >
+                        <Briefcase className="w-4 h-4 text-blue-700" />
+                        <span>Agent Workspace</span>
+                      </Link>
+                    )}
+
                     <div className="border-t border-border-subtle my-1" />
 
                     <button
@@ -199,7 +289,8 @@ export function Navbar() {
                   </div>
                 )}
               </div>
-            ) : (
+            </>
+          ) : (
               /* Logged out: Sign in CTA */
               <Link
                 href="/login"
@@ -222,8 +313,37 @@ export function Navbar() {
             </Link>
           </div>
 
-          {/* MOBILE: Hamburger Button */}
-          <div className="flex md:hidden items-center">
+          {/* MOBILE: Actions (Notifications & Hamburger) */}
+          <div className="flex md:hidden items-center gap-2">
+            {isAuthenticated && currentUser && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className={`relative p-2 rounded-lg border transition-all cursor-pointer ${
+                    isNotificationsOpen
+                      ? "border-accent-gold bg-accent-gold/10 text-primary-navy"
+                      : "border-border-default bg-white text-text-secondary hover:text-primary-navy"
+                  }`}
+                  aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-accent-gold text-dark-navy text-[9px] font-black flex items-center justify-center border-2 border-white shadow-soft-xs">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                <NotificationCenter
+                  isOpen={isNotificationsOpen}
+                  onClose={() => setIsNotificationsOpen(false)}
+                  unreadCount={unreadCount}
+                  onUnreadCountChange={setUnreadCount}
+                />
+              </div>
+            )}
+
             <button
               type="button"
               onClick={toggleMobileMenu}

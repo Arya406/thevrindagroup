@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -13,60 +13,227 @@ import {
   Clock,
   MapPin,
   Sparkles,
+  Heart,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth/auth-context";
-import {
-  MOCK_ACCOUNT_STATS,
-  MOCK_MANAGED_PROPERTIES,
-  MOCK_LEADS,
-} from "@/data/account/mockAccountData";
+import { EnquiryApiService, BackendPropertyEnquiry } from "@/lib/services/enquiry-api";
+import { SiteVisitApiService } from "@/lib/services/site-visit-api";
+import { PropertyApiService } from "@/lib/services/property-api";
+import { FavoriteApiService } from "@/lib/services/favorite-api";
+import { Property } from "@/types/property";
+import { Lead, ManagedProperty } from "@/types/account";
+
+function mapBackendEnquiryToLead(enq: BackendPropertyEnquiry): Lead {
+  return {
+    id: enq.id,
+    name: enq.buyer?.name || "Verified Seeker",
+    email: enq.buyer?.email || "seeker@thevrindagroup.com",
+    phone: enq.buyer?.phone || "+91 98765 43210",
+    propertyId: enq.propertyId,
+    propertyTitle: enq.property.title,
+    propertyLocation: enq.property.location
+      ? `${enq.property.location.locality}, ${enq.property.location.city}`
+      : "Bangalore",
+    enquiryType: "Request Callback",
+    message: enq.message || "I am interested in this property. Please share more details.",
+    status: enq.status === "CONTACTED" ? "CONTACTED" : enq.status === "CLOSED" ? "CLOSED" : "NEW",
+    createdAt: new Date(enq.createdAt).toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+  };
+}
+
+function mapPropertyToManaged(p: Property): ManagedProperty {
+  const category =
+    p.propertyType === "commercial-office" || p.propertyType === "retail-shop"
+      ? "commercial"
+      : "residential";
+
+  return {
+    id: p.id,
+    title: p.title,
+    location: p.location || "Bangalore",
+    city: p.city || "Bangalore",
+    price: p.priceNumeric || 0,
+    formattedPrice: p.price || "₹0",
+    image:
+      p.image ||
+      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
+    status: p.isApproved ? "ACTIVE" : "DRAFT",
+    views: 0,
+    enquiries: 0,
+    saves: 0,
+    visits: 0,
+    postedAt: p.postedDate || "Recently",
+    propertyType: p.propertyType,
+    transactionType: p.listingType === "rent" ? "rent" : "sale",
+    category,
+    bhk: p.bhk ? `${p.bhk} BHK` : undefined,
+    carpetArea: p.carpetArea || "1,200 sq.ft",
+  };
+}
 
 export function OverviewStats() {
-  const { currentUser } = useAuth();
-  const displayName = currentUser?.name ? currentUser.name.split(" ")[0] : "Arya";
+  const { currentUser, isAuthenticated } = useAuth();
+  const displayName = currentUser?.name ? currentUser.name.split(" ")[0] : "Member";
+  const isBuyer = currentUser?.role === "BUYER";
 
-  const activeProperties = MOCK_MANAGED_PROPERTIES.filter((p) => p.status === "ACTIVE").slice(0, 3);
-  const recentLeads = MOCK_LEADS.slice(0, 3);
+  const [realLeads, setRealLeads] = useState<Lead[]>([]);
+  const [realProperties, setRealProperties] = useState<ManagedProperty[]>([]);
+  const [totalEnquiriesCount, setTotalEnquiriesCount] = useState<number>(0);
+  const [upcomingVisitsCount, setUpcomingVisitsCount] = useState<number>(0);
+  const [activeListingsCount, setActiveListingsCount] = useState<number>(0);
+  const [pendingReviewCount, setPendingReviewCount] = useState<number>(0);
+  const [savedPropertiesCount, setSavedPropertiesCount] = useState<number>(0);
 
-  const statsList = [
-    {
-      title: "Active Listings",
-      value: MOCK_ACCOUNT_STATS.activeListings,
-      subtitle: "Live in Marketplace",
-      icon: Building2,
-      color: "text-primary-navy",
-      bg: "bg-primary-navy/10",
-      href: "/account/properties",
-    },
-    {
-      title: "Pending Review",
-      value: MOCK_ACCOUNT_STATS.pendingReview,
-      subtitle: "In Verification Queue",
-      icon: Clock,
-      color: "text-accent-gold-hover",
-      bg: "bg-accent-gold-light",
-      href: "/account/properties",
-    },
-    {
-      title: "Total Enquiries",
-      value: MOCK_ACCOUNT_STATS.totalEnquiries,
-      subtitle: "Verified Buyer Leads",
-      icon: Users,
-      color: "text-success-green",
-      bg: "bg-success-green-light",
-      href: "/account/leads",
-    },
-    {
-      title: "Upcoming Visits",
-      value: MOCK_ACCOUNT_STATS.upcomingVisits,
-      subtitle: "Scheduled on-site tours",
-      icon: CalendarCheck,
-      color: "text-[#9E6E18]",
-      bg: "bg-accent-gold-light",
-      href: "/account/visits",
-    },
-  ];
+  useEffect(() => {
+    if (isAuthenticated) {
+      // 1. Fetch Enquiries
+      EnquiryApiService.getMyEnquiries({ limit: 5 })
+        .then((res) => {
+          if (res.enquiries) {
+            setRealLeads(res.enquiries.map(mapBackendEnquiryToLead));
+            setTotalEnquiriesCount(res.pagination.total);
+          }
+        })
+        .catch(() => {
+          // Fallback gracefully
+        });
+
+      // 2. Fetch Site Visits
+      SiteVisitApiService.getMySiteVisits({ limit: 10 })
+        .then((res) => {
+          if (res.siteVisits) {
+            const upcoming = res.siteVisits.filter(
+              (v) =>
+                v.status === "REQUESTED" ||
+                v.status === "CONFIRMED" ||
+                v.status === "RESCHEDULED"
+            ).length;
+            setUpcomingVisitsCount(upcoming);
+          }
+        })
+        .catch(() => {
+          // Fallback gracefully
+        });
+
+      // 3. Fetch Favorites
+      FavoriteApiService.getMyFavorites({ limit: 1 })
+        .then((res) => {
+          if (res.pagination) {
+            setSavedPropertiesCount(res.pagination.total);
+          } else if (res.favorites) {
+            setSavedPropertiesCount(res.favorites.length);
+          }
+        })
+        .catch(() => {
+          // Fallback gracefully
+        });
+
+      // 4. Fetch Owner Listings (if owner/agent)
+      if (!isBuyer) {
+        PropertyApiService.getMyProperties({ limit: 10 })
+          .then((res) => {
+            if (res.properties) {
+              const mapped = res.properties.map(mapPropertyToManaged);
+              setRealProperties(mapped);
+              const active = mapped.filter((p) => p.status === "ACTIVE").length;
+              const pending = mapped.filter((p) => p.status === "PENDING" || p.status === "DRAFT").length;
+              setActiveListingsCount(active);
+              setPendingReviewCount(pending);
+            }
+          })
+          .catch(() => {
+            // Fallback gracefully
+          });
+      }
+    }
+  }, [isAuthenticated, isBuyer]);
+
+  const activeProperties = realProperties.filter((p) => p.status === "ACTIVE").slice(0, 3);
+  const displayLeads = realLeads.slice(0, 3);
+
+  const statsList = isBuyer
+    ? [
+        {
+          title: "Saved Properties",
+          value: savedPropertiesCount,
+          subtitle: "Shortlisted listings",
+          icon: Heart,
+          color: "text-error-red",
+          bg: "bg-error-red-light",
+          href: "/account/saved",
+        },
+        {
+          title: "My Enquiries",
+          value: totalEnquiriesCount,
+          subtitle: "Active conversations",
+          icon: Users,
+          color: "text-primary-navy",
+          bg: "bg-primary-navy/10",
+          href: "/account/leads",
+        },
+        {
+          title: "Scheduled Visits",
+          value: upcomingVisitsCount,
+          subtitle: "Upcoming walkthroughs",
+          icon: CalendarCheck,
+          color: "text-[#9E6E18]",
+          bg: "bg-accent-gold-light",
+          href: "/account/visits",
+        },
+        {
+          title: "Account Status",
+          value: "Verified",
+          subtitle: "Buyer Membership",
+          icon: Sparkles,
+          color: "text-success-green",
+          bg: "bg-success-green-light",
+          href: "/account/profile",
+        },
+      ]
+    : [
+        {
+          title: "Active Listings",
+          value: activeListingsCount,
+          subtitle: "Live in Marketplace",
+          icon: Building2,
+          color: "text-primary-navy",
+          bg: "bg-primary-navy/10",
+          href: "/account/properties",
+        },
+        {
+          title: "Pending Review",
+          value: pendingReviewCount,
+          subtitle: "In Verification Queue",
+          icon: Clock,
+          color: "text-accent-gold-hover",
+          bg: "bg-accent-gold-light",
+          href: "/account/properties",
+        },
+        {
+          title: "Total Enquiries",
+          value: totalEnquiriesCount,
+          subtitle: "Verified Buyer Leads",
+          icon: Users,
+          color: "text-success-green",
+          bg: "bg-success-green-light",
+          href: "/account/leads",
+        },
+        {
+          title: "Upcoming Visits",
+          value: upcomingVisitsCount,
+          subtitle: "Scheduled on-site tours",
+          icon: CalendarCheck,
+          color: "text-[#9E6E18]",
+          bg: "bg-accent-gold-light",
+          href: "/account/visits",
+        },
+      ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -77,26 +244,41 @@ export function OverviewStats() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-accent-gold/20 text-accent-gold border border-accent-gold/30">
               <Sparkles className="w-3.5 h-3.5" />
-              Owner & Agent Control Center
+              {isBuyer ? "Buyer Discovery & Account Center" : "Owner & Agent Control Center"}
             </div>
             <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight">
               Welcome back, {displayName}!
             </h1>
             <p className="text-xs sm:text-sm text-white/80 max-w-lg">
-              Here is what is happening across your listings, buyer inquiries, and upcoming inspections today.
+              {isBuyer
+                ? "Manage your shortlisted properties, track your inquiries, and inspect upcoming site visit appointments."
+                : "Here is what is happening across your listings, buyer inquiries, and upcoming inspections today."}
             </p>
           </div>
 
-          <Link href="/post-property" className="shrink-0">
-            <Button
-              variant="primary"
-              size="md"
-              leftIcon={<PlusCircle className="w-4 h-4" />}
-              className="text-xs font-bold shadow-soft-xs"
-            >
-              Post New Property
-            </Button>
-          </Link>
+          {isBuyer ? (
+            <Link href="/buy" className="shrink-0">
+              <Button
+                variant="primary"
+                size="md"
+                leftIcon={<Search className="w-4 h-4" />}
+                className="text-xs font-bold shadow-soft-xs"
+              >
+                Browse Properties
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/post-property" className="shrink-0">
+              <Button
+                variant="primary"
+                size="md"
+                leftIcon={<PlusCircle className="w-4 h-4" />}
+                className="text-xs font-bold shadow-soft-xs"
+              >
+                Post New Property
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -149,13 +331,13 @@ export function OverviewStats() {
               href="/account/leads"
               className="text-xs font-bold text-accent-gold-hover hover:underline flex items-center gap-1"
             >
-              View All ({MOCK_LEADS.length})
+              View All ({displayLeads.length})
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
           <div className="space-y-3">
-            {recentLeads.map((lead) => (
+            {displayLeads.map((lead) => (
               <Link
                 key={lead.id}
                 href="/account/leads"

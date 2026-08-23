@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,8 +9,10 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
-import { Container } from "@/components/ui";
+import { Container, Button } from "@/components/ui";
 import { RentDiscovery } from "@/components/rent/RentDiscovery";
 import { RentSearchBar } from "@/components/rent/RentSearchBar";
 import { RentFilters } from "@/components/rent/RentFilters";
@@ -21,9 +23,8 @@ import { RentPropertyListCard } from "@/components/rent/RentPropertyListCard";
 import { SortDropdown, SortOption } from "@/components/marketplace/SortDropdown";
 import { EmptyResults } from "@/components/marketplace/EmptyResults";
 import { PropertySkeleton } from "@/components/marketplace/PropertySkeleton";
-import { MOCK_RENTALS } from "@/data/mockRentals";
-import { MOCK_PROPERTIES } from "@/data/mockProperties";
-import { RentalFilters, TenantPreference } from "@/types/rental";
+import { RentalFilters, RentalProperty } from "@/types/rental";
+import { PropertyApiService, mapPropertyToRentalProperty } from "@/lib/services/property-api";
 
 const INITIAL_RENTAL_FILTERS: RentalFilters = {
   city: "All",
@@ -40,7 +41,7 @@ const INITIAL_RENTAL_FILTERS: RentalFilters = {
   isOwnerOnly: false,
 };
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 9;
 
 function RentPageContent() {
   const searchParams = useSearchParams();
@@ -76,7 +77,13 @@ function RentPageContent() {
   const [sortOption, setSortOption] = useState<SortOption>(sortParam);
   const [currentPage, setCurrentPage] = useState(1);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Backend Live State
+  const [rentals, setRentals] = useState<RentalProperty[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Sync state to URL params cleanly
   const syncToUrl = useCallback(
@@ -126,6 +133,117 @@ function RentPageContent() {
     [searchParams, pathname, router]
   );
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const effectiveBudget =
+      filters.rentRange !== "any" ? filters.rentRange : rentBudget;
+    const effectiveBhk =
+      filters.bhkList.length > 0 ? filters.bhkList[0] : bhk;
+    const effectivePropertyType =
+      filters.propertyTypes.length > 0 ? filters.propertyTypes[0] : propertyType;
+    const effectiveFurnishing =
+      filters.furnishingList.length > 0 ? filters.furnishingList[0] : furnishing;
+
+    PropertyApiService.getProperties({
+      listingType: "RENT",
+      search: locationQuery.trim() || undefined,
+      city: filters.city !== "All" ? filters.city : undefined,
+      budget: effectiveBudget !== "any" ? effectiveBudget : undefined,
+      bhk: effectiveBhk !== "any" ? effectiveBhk : undefined,
+      propertyType: effectivePropertyType !== "all" ? effectivePropertyType : undefined,
+      furnishingStatus: effectiveFurnishing !== "all" ? effectiveFurnishing : undefined,
+      sort:
+        sortOption === "price-asc"
+          ? "PRICE_LOW_TO_HIGH"
+          : sortOption === "price-desc"
+          ? "PRICE_HIGH_TO_LOW"
+          : "NEWEST",
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+    })
+      .then((res) => {
+        if (isMounted) {
+          const mapped = (res.properties || []).map(mapPropertyToRentalProperty);
+          setRentals(mapped);
+          setTotalCount(res.pagination.total);
+          setTotalPages(res.pagination.totalPages);
+          setFetchError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (isMounted) {
+          const msg =
+            err instanceof Error ? err.message : "Failed to load rental properties from server.";
+          setFetchError(msg);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    locationQuery,
+    propertyType,
+    rentBudget,
+    bhk,
+    furnishing,
+    filters,
+    sortOption,
+    currentPage,
+  ]);
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setFetchError(null);
+
+    const effectiveBudget =
+      filters.rentRange !== "any" ? filters.rentRange : rentBudget;
+    const effectiveBhk =
+      filters.bhkList.length > 0 ? filters.bhkList[0] : bhk;
+    const effectivePropertyType =
+      filters.propertyTypes.length > 0 ? filters.propertyTypes[0] : propertyType;
+    const effectiveFurnishing =
+      filters.furnishingList.length > 0 ? filters.furnishingList[0] : furnishing;
+
+    PropertyApiService.getProperties({
+      listingType: "RENT",
+      search: locationQuery.trim() || undefined,
+      city: filters.city !== "All" ? filters.city : undefined,
+      budget: effectiveBudget !== "any" ? effectiveBudget : undefined,
+      bhk: effectiveBhk !== "any" ? effectiveBhk : undefined,
+      propertyType: effectivePropertyType !== "all" ? effectivePropertyType : undefined,
+      furnishingStatus: effectiveFurnishing !== "all" ? effectiveFurnishing : undefined,
+      sort:
+        sortOption === "price-asc"
+          ? "PRICE_LOW_TO_HIGH"
+          : sortOption === "price-desc"
+          ? "PRICE_HIGH_TO_LOW"
+          : "NEWEST",
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+    })
+      .then((res) => {
+        const mapped = (res.properties || []).map(mapPropertyToRentalProperty);
+        setRentals(mapped);
+        setTotalCount(res.pagination.total);
+        setTotalPages(res.pagination.totalPages);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof Error ? err.message : "Failed to load rental properties from server.";
+        setFetchError(msg);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
+
   const handleCitySelect = (cityName: string) => {
     setLocationQuery(cityName);
     setFilters((prev) => ({ ...prev, city: cityName }));
@@ -135,113 +253,6 @@ function RentPageContent() {
       listingsSection.scrollIntoView({ behavior: "smooth" });
     }
   };
-
-  // Filter and Sort Processing
-  const filteredRentals = useMemo(() => {
-    return MOCK_RENTALS.filter((p) => {
-      // 1. Location
-      if (locationQuery) {
-        const query = locationQuery.toLowerCase();
-        const matchesLoc =
-          p.city.toLowerCase().includes(query) ||
-          p.locality.toLowerCase().includes(query) ||
-          p.location.toLowerCase().includes(query) ||
-          p.title.toLowerCase().includes(query);
-        if (!matchesLoc) return false;
-      }
-
-      // 2. Property Type
-      if (propertyType !== "all" && p.propertyType !== propertyType) return false;
-      if (
-        filters.propertyTypes.length > 0 &&
-        !filters.propertyTypes.includes(p.propertyType)
-      ) {
-        return false;
-      }
-
-      // 3. BHK
-      if (bhk !== "any" && p.bhk !== bhk) return false;
-      if (filters.bhkList.length > 0 && !filters.bhkList.includes(p.bhk)) {
-        return false;
-      }
-
-      // 4. Furnishing
-      if (furnishing !== "all" && p.furnishingStatus !== furnishing) return false;
-      if (
-        filters.furnishingList.length > 0 &&
-        !filters.furnishingList.includes(p.furnishingStatus)
-      ) {
-        return false;
-      }
-
-      // 5. Monthly Rent Budget
-      const effectiveBudget =
-        filters.rentRange !== "any" ? filters.rentRange : rentBudget;
-      if (effectiveBudget === "under-15k" && p.monthlyRent > 15000) return false;
-      if (
-        effectiveBudget === "15k-30k" &&
-        (p.monthlyRent < 15000 || p.monthlyRent > 30000)
-      )
-        return false;
-      if (
-        effectiveBudget === "30k-50k" &&
-        (p.monthlyRent < 30000 || p.monthlyRent > 50000)
-      )
-        return false;
-      if (
-        effectiveBudget === "50k-75k" &&
-        (p.monthlyRent < 50000 || p.monthlyRent > 75000)
-      )
-        return false;
-      if (effectiveBudget === "above-75k" && p.monthlyRent < 75000) return false;
-
-      // 6. Direct Owner Only
-      if (filters.isOwnerOnly && p.sellerType !== "owner") return false;
-
-      // 7. Tenant Preference
-      if (filters.tenantPreferences.length > 0) {
-        const matchesPref = filters.tenantPreferences.some((tp) =>
-          p.tenantPreference.includes(tp as TenantPreference)
-        );
-        if (!matchesPref) return false;
-      }
-
-      // 8. Availability
-      if (
-        filters.availabilityList.length > 0 &&
-        !filters.availabilityList.includes(p.availability)
-      ) {
-        return false;
-      }
-
-      // 9. Amenities
-      if (filters.amenities.length > 0) {
-        const hasAll = filters.amenities.every((a) => p.amenities.includes(a));
-        if (!hasAll) return false;
-      }
-
-      return true;
-    }).sort((a, b) => {
-      if (sortOption === "newest") {
-        return b.id.localeCompare(a.id);
-      }
-      if (sortOption === "price-asc") {
-        return a.monthlyRent - b.monthlyRent;
-      }
-      if (sortOption === "price-desc") {
-        return b.monthlyRent - a.monthlyRent;
-      }
-      return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
-    });
-  }, [
-    locationQuery,
-    propertyType,
-    rentBudget,
-    bhk,
-    furnishing,
-    filters,
-    sortOption,
-  ]);
 
   // Construct Active Filter Chips
   const activeFilterList: ActiveFilterItem[] = useMemo(() => {
@@ -359,7 +370,6 @@ function RentPageContent() {
   };
 
   const handleSearchSubmit = () => {
-    setIsLoading(true);
     setCurrentPage(1);
     syncToUrl({
       city: locationQuery,
@@ -368,15 +378,7 @@ function RentPageContent() {
       rentBudget,
       furnishing,
     });
-    setTimeout(() => setIsLoading(false), 200);
   };
-
-  // Pagination Slice
-  const totalPages = Math.ceil(filteredRentals.length / ITEMS_PER_PAGE) || 1;
-  const paginatedRentals = filteredRentals.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   return (
     <div className="py-6 sm:py-8 bg-bg-light min-h-screen font-sans text-text-primary">
@@ -436,9 +438,28 @@ function RentPageContent() {
           />
         </div>
 
+        {/* Error Banner */}
+        {fetchError && (
+          <div className="rounded-xl bg-error-red-light/80 border border-error-red/30 p-4 text-xs text-error-red flex items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{fetchError}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+              className="text-xs h-8"
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* 3. Main Content: Filter Sidebar + Rental Results */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* LEFT: Desktop Sticky Filter Sidebar (3 cols ~ 280-320px) */}
+          {/* LEFT: Desktop Sticky Filter Sidebar */}
           <div className="hidden lg:block lg:col-span-3 sticky top-24">
             <RentFilters
               filters={filters}
@@ -478,7 +499,7 @@ function RentPageContent() {
                 </h1>
                 <p className="text-xs text-text-secondary">
                   <strong className="text-primary-navy font-bold">
-                    {filteredRentals.length}
+                    {totalCount}
                   </strong>{" "}
                   rental listings found with zero brokerage options
                 </p>
@@ -529,24 +550,24 @@ function RentPageContent() {
             {/* Active Filters Chips */}
             <ActiveFilters
               filters={activeFilterList}
-              totalCount={filteredRentals.length}
+              totalCount={totalCount}
               onClearAll={handleClearAll}
             />
 
             {/* Results Grid / List */}
             {isLoading ? (
               <PropertySkeleton viewMode={viewMode} count={ITEMS_PER_PAGE} />
-            ) : filteredRentals.length > 0 ? (
+            ) : rentals.length > 0 ? (
               <>
                 {viewMode === "grid" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
-                    {paginatedRentals.map((rental) => (
+                    {rentals.map((rental) => (
                       <RentPropertyCard key={rental.id} property={rental} />
                     ))}
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {paginatedRentals.map((rental) => (
+                    {rentals.map((rental) => (
                       <RentPropertyListCard key={rental.id} property={rental} />
                     ))}
                   </div>
@@ -559,9 +580,9 @@ function RentPageContent() {
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
                       {Math.min(
                         currentPage * ITEMS_PER_PAGE,
-                        filteredRentals.length
+                        totalCount
                       )}{" "}
-                      of {filteredRentals.length} Rentals
+                      of {totalCount} Rentals
                     </p>
 
                     <div className="flex items-center gap-1.5">
@@ -581,10 +602,10 @@ function RentPageContent() {
                             key={page}
                             type="button"
                             onClick={() => setCurrentPage(page)}
-                            className={`w-8 h-8 rounded-lg font-bold transition-all cursor-pointer ${
+                            className={`w-8 h-8 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
                               currentPage === page
-                                ? "bg-primary-navy text-white shadow-soft-xs"
-                                : "bg-white text-text-primary border border-border-default hover:bg-bg-light"
+                                ? "bg-primary-navy text-white"
+                                : "border border-border-default bg-white text-text-primary hover:bg-bg-light"
                             }`}
                           >
                             {page}
@@ -608,34 +629,39 @@ function RentPageContent() {
                 )}
               </>
             ) : (
-              <EmptyResults
-                onClearFilters={handleClearAll}
-                recommendedProperties={MOCK_PROPERTIES.slice(0, 3)}
-              />
+              <EmptyResults onClearFilters={handleClearAll} />
             )}
           </div>
         </div>
-
-        {/* Mobile Rental Filter Modal */}
-        <MobileRentFilterModal
-          isOpen={isMobileFiltersOpen}
-          onClose={() => setIsMobileFiltersOpen(false)}
-          filters={filters}
-          onFilterChange={(f) => {
-            setFilters(f);
-            setCurrentPage(1);
-          }}
-          onClearAll={handleClearAll}
-          matchingCount={filteredRentals.length}
-        />
       </Container>
+
+      {/* Mobile Filters Modal */}
+      <MobileRentFilterModal
+        isOpen={isMobileFiltersOpen}
+        onClose={() => setIsMobileFiltersOpen(false)}
+        filters={filters}
+        onFilterChange={(f) => {
+          setFilters(f);
+          setCurrentPage(1);
+        }}
+        onClearAll={handleClearAll}
+        matchingCount={totalCount}
+      />
     </div>
   );
 }
 
 export default function RentPage() {
   return (
-    <Suspense fallback={<PropertySkeleton count={6} />}>
+    <Suspense
+      fallback={
+        <div className="py-12 bg-bg-light min-h-screen">
+          <Container>
+            <PropertySkeleton viewMode="grid" count={6} />
+          </Container>
+        </div>
+      }
+    >
       <RentPageContent />
     </Suspense>
   );

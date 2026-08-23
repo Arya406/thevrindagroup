@@ -10,20 +10,26 @@ export type PropertyType =
 
 export interface Property {
   id: string;
+  referenceCode?: string;
+  slug?: string;
   title: string;
   price: string;
   priceNumeric: number; // in INR
+  priceUnit?: string;
   bhk: number | string;
   bathrooms: number;
   carpetArea: string; // e.g. "1,450 sq.ft"
+  areaNumeric?: number;
   location: string;
   city: string;
+  state?: string;
+  pincode?: string;
   address: string;
   propertyType: PropertyType;
   listingType: ListingType;
   isReraVerified: boolean;
   reraNumber?: string;
-  sellerType: "owner" | "agent";
+  sellerType: "owner" | "agent" | "developer";
   sellerName: string;
   sellerPhone?: string;
   isFeatured?: boolean;
@@ -31,13 +37,15 @@ export interface Property {
   image: string;
   images: string[];
   description: string;
-  furnishingStatus: "Furnished" | "Semi-Furnished" | "Unfurnished";
-  possessionStatus: "Ready to Move" | "Under Construction";
+  furnishingStatus: "Furnished" | "Semi-Furnished" | "Unfurnished" | string;
+  possessionStatus: "Ready to Move" | "Under Construction" | string;
   floor?: string;
   facing?: string;
   parking?: string;
   amenities: string[];
   postedDate: string;
+  status?: string;
+  isApproved?: boolean;
 }
 
 export interface NewProject {
@@ -48,14 +56,14 @@ export interface NewProject {
   city: string;
   startingPrice: string;
   startingPriceNumeric: number;
-  propertyTypes: string; // e.g. "2, 3 & 4 BHK Luxury Apartments"
+  propertyTypes: string;
   possessionDate: string;
-  possessionStatus: string;
+  possessionStatus?: string;
   image: string;
-  reraNumber: string;
+  reraNumber?: string;
   tag?: string;
   unitsAvailable?: number;
-  highlight: string;
+  highlight?: string;
 }
 
 export interface CityInfo {
@@ -67,10 +75,15 @@ export interface CityInfo {
   popularLocalities: string[];
 }
 
-export interface SearchFilterState {
-  listingType: ListingType;
+export interface CommercialProperty {
+  id: string;
+  title: string;
+  price: string;
+  priceNumeric: number;
+  suitableFor: string[];
+  carpetArea: string;
   location: string;
-  propertyType: string;
-  budget: string;
-  bhk: string;
+  city: string;
+  image: string;
+  type: "office" | "retail" | "warehouse";
 }

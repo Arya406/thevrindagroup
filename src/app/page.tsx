@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -8,22 +8,20 @@ import {
   Building2,
   Lock,
   Clock,
-  Compass,
   MapPin,
   PlusCircle,
   Sparkles,
   CheckCircle2,
-  Award,
 } from "lucide-react";
 import { Container, Button } from "@/components/ui";
 import { HeroSearch } from "@/components/marketplace/HeroSearch";
 import { PropertyCard } from "@/components/marketplace/PropertyCard";
 import { ProjectCard } from "@/components/marketplace/ProjectCard";
 import { CityCard } from "@/components/marketplace/CityCard";
-import { MOCK_PROPERTIES } from "@/data/mockProperties";
 import { MOCK_PROJECTS } from "@/data/mockProjects";
 import { MOCK_CITIES } from "@/data/mockCities";
-import { ListingType } from "@/types/property";
+import { ListingType, Property } from "@/types/property";
+import { PropertyApiService } from "@/lib/services/property-api";
 
 const RECOMMENDED_BADGES = [
   "High Rental Yield",
@@ -36,9 +34,35 @@ export default function HomePage() {
   const [selectedCityFilter, setSelectedCityFilter] = useState<string>("All");
   const [propertyCategory, setPropertyCategory] = useState<string>("all");
   const [activeListingType, setActiveListingType] = useState<ListingType>("buy");
+  const [allProperties, setAllProperties] = useState<Property[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    PropertyApiService.searchProperties({ limit: 24 })
+      .then((res) => {
+        if (isMounted) {
+          setAllProperties(res.properties || []);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAllProperties([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Filter properties based on active filters
-  const filteredProperties = MOCK_PROPERTIES.filter((p) => {
+  const filteredProperties = allProperties.filter((p) => {
     const matchesListing =
       activeListingType === "buy" ? true : p.listingType === activeListingType;
 
@@ -268,7 +292,7 @@ export default function HomePage() {
                     : "bg-white text-text-secondary hover:text-text-primary border border-border-default hover:border-border-dark"
                 }`}
               >
-                All ({MOCK_PROPERTIES.length})
+                All ({allProperties.length})
               </button>
 
               <button
@@ -310,7 +334,13 @@ export default function HomePage() {
           </div>
 
           {/* Properties Grid */}
-          {filteredProperties.length > 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="h-80 bg-bg-light animate-pulse rounded-2xl border border-border-default" />
+              ))}
+            </div>
+          ) : filteredProperties.length > 0 ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch">
                 {filteredProperties.map((property) => (
@@ -342,7 +372,7 @@ export default function HomePage() {
               <Building2 className="w-10 h-10 text-text-muted mx-auto" />
               <h3 className="heading-card">No properties match your current filter</h3>
               <p className="text-xs text-text-secondary">
-                Try resetting your city or category filter to view all verified properties.
+                Try selecting a different city or category to discover active verified listings.
               </p>
               <Button
                 variant="outline"
@@ -351,8 +381,9 @@ export default function HomePage() {
                   setSelectedCityFilter("All");
                   setPropertyCategory("all");
                 }}
+                className="mt-2 text-xs"
               >
-                Reset All Filters
+                Reset Filters
               </Button>
             </div>
           )}
@@ -360,33 +391,69 @@ export default function HomePage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. TRENDING CITIES */}
+      {/* 3. POST PROPERTY PROMOTIONAL BANNER */}
       {/* ========================================================================= */}
-      <section className="py-16 md:py-20 bg-white border-y border-border-default">
-        <Container className="space-y-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent-gold-hover mb-1">
-                <Compass className="w-3.5 h-3.5" />
-                Explore India’s Prime Real Estate
-              </div>
-              <h2 className="heading-section text-primary-navy">Trending Cities</h2>
-              <p className="text-sm text-text-secondary mt-1">
-                Find properties in India’s fastest-growing metropolitan real estate hubs.
+      <section className="py-12 bg-primary-navy text-white">
+        <Container>
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-8 bg-gradient-to-r from-primary-navy-dark via-primary-navy to-primary-navy-light p-8 md:p-12 rounded-2xl border border-accent-gold/20 shadow-soft-lg">
+            <div className="space-y-3 max-w-xl text-center lg:text-left">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-gold/20 text-accent-gold text-xs font-bold uppercase tracking-wider border border-accent-gold/30">
+                <Sparkles className="w-3.5 h-3.5" />
+                Zero Brokerage for Direct Owners
+              </span>
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">
+                Sell or Rent Your Property Faster
+              </h2>
+              <p className="text-sm text-text-muted">
+                List your residential or commercial asset on TheVrindaGroup. Reach verified buyers and corporate tenants directly with zero commission.
               </p>
             </div>
-            <span className="text-xs text-text-secondary font-medium hidden sm:inline-block">
-              Click any city to filter verified listings
-            </span>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4 shrink-0">
+              <Link href="/post-property">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="font-bold text-xs uppercase tracking-wider shadow-soft flex items-center gap-2"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Post Property Free
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 4. EXPLORE TOP REAL ESTATE HUBS */}
+      {/* ========================================================================= */}
+      <section className="py-16 md:py-20 bg-bg-light">
+        <Container className="space-y-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-border-default pb-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-accent-gold-hover">
+                Prime Urban Markets
+              </span>
+              <h2 className="heading-section text-primary-navy">
+                Explore Real Estate by City
+              </h2>
+              <p className="text-sm text-text-secondary mt-1">
+                Discover verified homes in high-growth corridors across major Indian metros.
+              </p>
+            </div>
           </div>
 
-          {/* 6 City Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             {MOCK_CITIES.map((city) => (
               <CityCard
                 key={city.id}
                 city={city}
-                onSelectCity={handleCitySelect}
+                onSelectCity={(cityName: string) => {
+                  setSelectedCityFilter(cityName);
+                  const el = document.getElementById("featured-properties");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
               />
             ))}
           </div>
@@ -394,26 +461,24 @@ export default function HomePage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. NEW PROJECTS SECTION */}
+      {/* 4B. UPCOMING LUXURY PROJECTS */}
       {/* ========================================================================= */}
-      <section id="new-projects" className="py-16 md:py-20 bg-bg-light">
+      <section className="py-16 md:py-20 bg-white border-t border-border-default">
         <Container className="space-y-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border-default pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-border-default pb-4">
             <div>
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent-gold-hover mb-1">
-                <Award className="w-3.5 h-3.5" />
-                New Landmark Developments
-              </div>
+              <span className="text-xs font-bold uppercase tracking-wider text-accent-gold-hover">
+                New Launches &amp; Master-Planned Communities
+              </span>
               <h2 className="heading-section text-primary-navy">
-                New Project Launches
+                Upcoming Luxury Projects
               </h2>
               <p className="text-sm text-text-secondary mt-1">
-                Exclusive upcoming residential enclaves from India’s top certified developers.
+                Gated enclaves and integrated townships from Tier-1 builders with RERA approval.
               </p>
             </div>
           </div>
 
-          {/* 2x2 Large Project Cards Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
             {MOCK_PROJECTS.map((project) => (
               <ProjectCard key={project.id} project={project} />
@@ -425,37 +490,39 @@ export default function HomePage() {
       {/* ========================================================================= */}
       {/* 5. RECOMMENDED PROPERTIES SECTION (Differentiated Value Focus) */}
       {/* ========================================================================= */}
-      <section className="py-16 md:py-20 bg-white border-t border-border-default">
-        <Container className="space-y-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-border-default pb-4">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-success-green mb-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                High Demand & Verified Value
+      {allProperties.length > 0 && (
+        <section className="py-16 md:py-20 bg-white border-t border-border-default">
+          <Container className="space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-border-default pb-4">
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-success-green mb-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  High Demand &amp; Verified Value
+                </div>
+                <h2 className="heading-section text-primary-navy">
+                  Recommended by TheVrindaGroup
+                </h2>
+                <p className="text-sm text-text-secondary mt-1">
+                  Popular homes selected for exceptional value, prime connectivity, and verified deeds.
+                </p>
               </div>
-              <h2 className="heading-section text-primary-navy">
-                Recommended by TheVrindaGroup
-              </h2>
-              <p className="text-sm text-text-secondary mt-1">
-                Popular homes selected for exceptional value, prime connectivity, and verified deeds.
-              </p>
+              <span className="text-xs text-text-muted hidden sm:inline-block">
+                Updated daily based on buyer inquiries
+              </span>
             </div>
-            <span className="text-xs text-text-muted hidden sm:inline-block">
-              Updated daily based on buyer inquiries
-            </span>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-            {MOCK_PROPERTIES.slice(0, 4).map((property, idx) => (
-              <PropertyCard
-                key={`rec-${property.id}`}
-                property={property}
-                badgeHighlight={RECOMMENDED_BADGES[idx % RECOMMENDED_BADGES.length]}
-              />
-            ))}
-          </div>
-        </Container>
-      </section>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+              {allProperties.slice(0, 4).map((property, idx) => (
+                <PropertyCard
+                  key={`rec-${property.id}`}
+                  property={property}
+                  badgeHighlight={RECOMMENDED_BADGES[idx % RECOMMENDED_BADGES.length]}
+                />
+              ))}
+            </div>
+          </Container>
+        </section>
+      )}
 
       {/* ========================================================================= */}
       {/* 6. WHY THEVRINDAGROUP (4 TRUST CARDS) */}

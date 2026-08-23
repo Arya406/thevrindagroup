@@ -45,22 +45,43 @@ export function Step4Photos({
 }: Step4PhotosProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+  const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    setValidationError(null);
 
     const newPhotos: UploadedPhoto[] = [];
+    const rejectedFiles: string[] = [];
+
     Array.from(files).forEach((file) => {
-      if (file.type.startsWith("image/")) {
-        const objectUrl = URL.createObjectURL(file);
-        newPhotos.push({
-          id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-          url: objectUrl,
-          name: file.name,
-          isCover: photos.length === 0 && newPhotos.length === 0,
-        });
+      if (!ALLOWED_TYPES.includes(file.type.toLowerCase())) {
+        rejectedFiles.push(`${file.name} (unsupported format. Use JPG, PNG, or WebP)`);
+        return;
       }
+      if (file.size > MAX_SIZE_BYTES) {
+        rejectedFiles.push(
+          `${file.name} (exceeds 5MB limit: ${(file.size / (1024 * 1024)).toFixed(1)}MB)`
+        );
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(file);
+      newPhotos.push({
+        id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        file: file,
+        url: objectUrl,
+        name: file.name,
+        isCover: photos.length === 0 && newPhotos.length === 0,
+      });
     });
+
+    if (rejectedFiles.length > 0) {
+      setValidationError(`Some files could not be added: ${rejectedFiles.join("; ")}`);
+    }
 
     if (newPhotos.length > 0) {
       onPhotosChange([...photos, ...newPhotos]);
@@ -68,6 +89,7 @@ export function Step4Photos({
   };
 
   const handleAddPresets = () => {
+    setValidationError(null);
     const presetPhotos: UploadedPhoto[] = SAMPLE_PHOTO_PRESETS.map(
       (preset, idx) => ({
         id: `preset-${Date.now()}-${idx}`,
@@ -80,6 +102,15 @@ export function Step4Photos({
   };
 
   const handleDelete = (id: string) => {
+    const target = photos.find((p) => p.id === id);
+    if (target?.url.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(target.url);
+      } catch {
+        // Ignore revoke errors
+      }
+    }
+
     const updated = photos.filter((p) => p.id !== id);
     if (updated.length > 0 && !updated.some((p) => p.isCover)) {
       updated[0].isCover = true;
@@ -166,7 +197,7 @@ export function Step4Photos({
             Click to upload photos or drag and drop
           </strong>
           <span className="text-xs text-text-muted block mt-0.5">
-            Supports JPG, PNG, WEBP up to 10MB per file
+            Supports JPG, PNG, WEBP up to 5MB per file
           </span>
         </div>
 
@@ -179,6 +210,12 @@ export function Step4Photos({
           Browse Files from Device
         </Button>
       </div>
+
+      {validationError && (
+        <p className="text-xs text-error-red font-semibold bg-error-red-light p-2.5 rounded-lg border border-error-red/30">
+          {validationError}
+        </p>
+      )}
 
       {error && (
         <p className="text-xs text-error-red font-semibold bg-error-red-light p-2.5 rounded-lg border border-error-red/30">

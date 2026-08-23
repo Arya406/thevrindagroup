@@ -1,14 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, MapPin, BedDouble, Maximize2, ExternalLink } from "lucide-react";
+import { Heart, MapPin, BedDouble, Maximize2, ExternalLink, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui";
 import { EmptyState } from "./EmptyState";
+import { useAuth } from "@/lib/auth/auth-context";
+import { FavoriteApiService, BackendPropertyFavorite } from "@/lib/services/favorite-api";
 
 interface SavedItem {
   id: string;
+  favoriteId: string;
   title: string;
   location: string;
   price: string;
@@ -20,58 +23,122 @@ interface SavedItem {
   link: string;
 }
 
-const INITIAL_SAVED_ITEMS: SavedItem[] = [
-  {
-    id: "prop-1",
-    title: "Sobha Windchimes 3 BHK Luxury Apartment",
-    location: "Bannerghatta Road, Bangalore",
-    price: "₹1.85 Cr",
-    bhk: "3 BHK",
-    area: "1,780 sq.ft",
-    category: "buy",
-    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
-    postedAt: "Saved 2 days ago",
-    link: "/property/prop-1",
-  },
-  {
-    id: "prop-3",
-    title: "Brigade Gateway 2 BHK Furnished High-Floor Flat",
-    location: "Malleshwaram, Bangalore",
-    price: "₹55,000 / mo",
-    bhk: "2 BHK",
-    area: "1,220 sq.ft",
-    category: "rent",
-    image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
-    postedAt: "Saved 4 days ago",
-    link: "/property/prop-3",
-  },
-  {
-    id: "comm-1",
-    title: "Prestige Tech Park IV Grade-A Office Floor",
-    location: "Outer Ring Road, Bangalore",
-    price: "₹4.62 L / mo",
-    area: "4,200 sq.ft",
-    category: "commercial",
-    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-    postedAt: "Saved 1 week ago",
-    link: "/commercial/property/comm-1",
-  },
-];
-
 type SavedTabType = "ALL" | "buy" | "rent" | "commercial";
 
-export function SavedPropertiesManager() {
-  const [savedItems, setSavedItems] = useState<SavedItem[]>(INITIAL_SAVED_ITEMS);
-  const [currentTab, setCurrentTab] = useState<SavedTabType>("ALL");
+function mapFavoriteToSavedItem(fav: BackendPropertyFavorite): SavedItem {
+  const prop = fav.property;
+  const isCommercial = prop.propertyType === "COMMERCIAL" || prop.propertyType === "OFFICE";
+  const isRental = prop.listingType === "RENT";
+  const category: SavedItem["category"] = isCommercial
+    ? "commercial"
+    : isRental
+    ? "rent"
+    : "buy";
 
-  const handleRemove = (id: string) => {
-    setSavedItems((prev) => prev.filter((item) => item.id !== id));
+  const locality = prop.location ? `${prop.location.locality}, ${prop.location.city}` : "Bangalore";
+  const formattedPrice =
+    prop.price >= 10000000
+      ? `₹${(prop.price / 10000000).toFixed(2)} Cr`
+      : prop.price >= 100000
+      ? `₹${(prop.price / 100000).toFixed(2)} L`
+      : `₹${prop.price.toLocaleString("en-IN")}`;
+
+  const primaryImage =
+    prop.images?.find((img) => img.isPrimary)?.url ||
+    prop.images?.[0]?.url ||
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80";
+
+  const link = isCommercial
+    ? `/commercial/property/${prop.id}`
+    : `/property/${prop.id}`;
+
+  return {
+    id: prop.id,
+    favoriteId: fav.id,
+    title: prop.title,
+    location: locality,
+    price: isRental ? `${formattedPrice} / mo` : formattedPrice,
+    bhk: prop.bedrooms ? `${prop.bedrooms} BHK` : undefined,
+    area: prop.area ? `${prop.area.toLocaleString("en-IN")} sq.ft` : "Spacious",
+    category,
+    image: primaryImage,
+    postedAt: `Saved ${new Date(fav.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`,
+    link,
+  };
+}
+
+export function SavedPropertiesManager() {
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
+  const [currentTab, setCurrentTab] = useState<SavedTabType>("ALL");
+  const [isFetching, setIsFetching] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (isAuthenticated) {
+      FavoriteApiService.getMyFavorites({ limit: 50 })
+        .then((res) => {
+          if (isMounted && res.favorites) {
+            setSavedItems(res.favorites.map(mapFavoriteToSavedItem));
+          }
+        })
+        .catch((err: unknown) => {
+          if (isMounted) {
+            const msg = err instanceof Error ? err.message : "Failed to load saved properties.";
+            setError(msg);
+          }
+        })
+        .finally(() => {
+          if (isMounted) {
+            setIsFetching(false);
+          }
+        });
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated]);
+
+  const handleRetry = () => {
+    setIsFetching(true);
+    setError(null);
+    FavoriteApiService.getMyFavorites({ limit: 50 })
+      .then((res) => {
+        if (res.favorites) {
+          setSavedItems(res.favorites.map(mapFavoriteToSavedItem));
+        }
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Failed to load saved properties.";
+        setError(msg);
+      })
+      .finally(() => {
+        setIsFetching(false);
+      });
+  };
+
+  const handleRemove = async (propertyId: string) => {
+    const previousItems = [...savedItems];
+    setSavedItems((prev) => prev.filter((item) => item.id !== propertyId));
+
+    try {
+      await FavoriteApiService.removeFavorite(propertyId);
+    } catch (err: unknown) {
+      setSavedItems(previousItems);
+      const msg = err instanceof Error ? err.message : "Unable to remove favorite.";
+      setError(msg);
+    }
   };
 
   const filteredItems = savedItems.filter((item) => {
     if (currentTab === "ALL") return true;
     return item.category === currentTab;
   });
+
+  const showLoading = isAuthLoading || (isAuthenticated && isFetching);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -92,6 +159,25 @@ export function SavedPropertiesManager() {
           </Button>
         </Link>
       </div>
+
+      {/* Error State Banner */}
+      {error && (
+        <div className="rounded-xl bg-error-red-light/80 border border-error-red/30 p-4 text-xs text-error-red flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRetry}
+            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+            className="text-xs h-8"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
 
       {/* Category Tabs */}
       <div className="flex gap-2 border-b border-border-default pb-1">
@@ -133,8 +219,23 @@ export function SavedPropertiesManager() {
         })}
       </div>
 
-      {/* Grid */}
-      {filteredItems.length > 0 ? (
+      {/* Loading Skeleton */}
+      {showLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className="rounded-2xl border border-border-default bg-white p-4 space-y-3 animate-pulse"
+            >
+              <div className="w-full aspect-16/10 bg-slate-200 rounded-xl" />
+              <div className="h-4 bg-slate-200 rounded w-1/3" />
+              <div className="h-4 bg-slate-200 rounded w-3/4" />
+              <div className="h-3 bg-slate-200 rounded w-1/2" />
+            </div>
+          ))}
+        </div>
+      ) : filteredItems.length > 0 ? (
+        /* Grid */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredItems.map((item) => (
             <div

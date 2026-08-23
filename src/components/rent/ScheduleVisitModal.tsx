@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Calendar, Clock, CheckCircle2, ShieldCheck } from "lucide-react";
+import { X, Calendar, Clock, CheckCircle2, ShieldCheck, AlertCircle } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { RentalProperty, RentalVisitRequest } from "@/types/rental";
+import { useAuth } from "@/lib/auth/auth-context";
+import { SiteVisitApiService } from "@/lib/services/site-visit-api";
 
 export interface ScheduleVisitModalProps {
   isOpen: boolean;
@@ -16,26 +18,68 @@ export function ScheduleVisitModal({
   onClose,
   property,
 }: ScheduleVisitModalProps) {
+  const { currentUser, isAuthenticated, requireAuth } = useAuth();
   const [date, setDate] = useState("");
   const [timeSlot, setTimeSlot] = useState<RentalVisitRequest["preferredSlot"]>(
     "Morning (09:00 AM - 12:00 PM)"
   );
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(currentUser?.name || "");
+  const [phone, setPhone] = useState(currentUser?.phone || "");
   const [isBooked, setIsBooked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!date || !name || !phone) return;
+  const executeSubmit = async () => {
+    if (!date || !name || !phone || isLoading) return;
 
     setIsLoading(true);
-    setTimeout(() => {
+    setError(null);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(property.id);
+    if (isUuid) {
+      try {
+        let hour = 10;
+        if (timeSlot.startsWith("Afternoon")) hour = 14;
+        else if (timeSlot.startsWith("Evening")) hour = 17;
+
+        const scheduledDate = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00.000Z`);
+        const targetIso = scheduledDate.toISOString();
+
+        await SiteVisitApiService.createSiteVisit(property.id, {
+          scheduledAt: targetIso,
+          buyerNote: `Preferred Slot: ${timeSlot}. Visitor: ${name} (${phone})`,
+        });
+
+        setIsBooked(true);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Unable to schedule site visit.";
+        setError(msg);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // Offline fallback for demo properties
       setIsLoading(false);
       setIsBooked(true);
-    }, 400);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      const allowed = requireAuth({
+        title: "Sign in to Schedule a Visit",
+        message: "Sign in with your verified account to schedule property visits and receive confirmations.",
+        onAuthenticated: () => executeSubmit(),
+      });
+      if (allowed) {
+        executeSubmit();
+      }
+      return;
+    }
+    executeSubmit();
   };
 
   const handleResetAndClose = () => {
@@ -113,6 +157,13 @@ export function ScheduleVisitModal({
                 {property.title} · {property.formattedRent}
               </p>
             </div>
+
+            {error && (
+              <div className="p-3 rounded-xl bg-error-red-light border border-error-red/20 text-error-red text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">

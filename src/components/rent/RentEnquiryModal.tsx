@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, ShieldCheck, CheckCircle2, Send } from "lucide-react";
+import { X, ShieldCheck, CheckCircle2, Send, AlertCircle } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { RentalProperty, RentalEnquiry } from "@/types/rental";
+import { useAuth } from "@/lib/auth/auth-context";
+import { EnquiryApiService, BackendPropertyEnquiry } from "@/lib/services/enquiry-api";
+import { ApiClientError } from "@/lib/api-client";
 
 export interface RentEnquiryModalProps {
   isOpen: boolean;
@@ -16,32 +19,82 @@ export function RentEnquiryModal({
   onClose,
   property,
 }: RentEnquiryModalProps) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const { currentUser, isAuthenticated, requireAuth } = useAuth();
+
+  const [name, setName] = useState(currentUser?.name || "");
+  const [phone, setPhone] = useState(currentUser?.phone || "");
+  const [email, setEmail] = useState(currentUser?.email || "");
   const [interestType, setInterestType] = useState<RentalEnquiry["interestType"]>("Request Callback");
   const [message, setMessage] = useState(
-    `Hi ${property.sellerName}, I am interested in your ${property.bhk} rental property in ${property.locality}, ${property.city}. Please share details.`
+    `Hi ${property.sellerName}, I am interested in your ${property.bhk} rental property in ${property.locality}, ${property.city}. Please share availability and terms.`
   );
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdEnquiry, setCreatedEnquiry] = useState<BackendPropertyEnquiry | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !phone) return;
-
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSubmitted(true);
-    }, 400);
-  };
-
   const handleResetAndClose = () => {
     setIsSubmitted(false);
+    setErrorMessage(null);
+    setCreatedEnquiry(null);
     onClose();
+  };
+
+  const executeSubmit = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const enquiry = await EnquiryApiService.createEnquiry(property.id, {
+        message: message.trim() || undefined,
+      });
+
+      setCreatedEnquiry(enquiry);
+      setIsSubmitted(true);
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        if (err.statusCode === 400 && err.message.toLowerCase().includes("active enquiry")) {
+          setErrorMessage("You already have an active enquiry for this property.");
+        } else if (err.statusCode === 400 && err.message.toLowerCase().includes("own property")) {
+          setErrorMessage("You cannot enquire about your own property.");
+        } else if (err.statusCode === 403) {
+          setErrorMessage("You do not have permission to submit an enquiry for this property.");
+        } else if (err.statusCode === 401) {
+          setErrorMessage("Your session has expired. Please sign in again.");
+        } else {
+          setErrorMessage(err.message || "Failed to submit rental enquiry.");
+        }
+      } else {
+        setErrorMessage(
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred. Please try again."
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      const canProceed = requireAuth({
+        title: "Sign in to send rental enquiry",
+        message: "Sign in to send direct enquiries to verified landlords and agents.",
+        onAuthenticated: () => executeSubmit(),
+      });
+      if (canProceed) {
+        executeSubmit();
+      }
+      return;
+    }
+
+    executeSubmit();
   };
 
   return (
@@ -70,12 +123,16 @@ export function RentEnquiryModal({
               <p className="text-xs text-text-secondary max-w-sm mx-auto">
                 Your interest has been shared directly with{" "}
                 <strong className="text-primary-navy">{property.sellerName}</strong>.
-                You will receive a callback or WhatsApp notification shortly.
+                You will receive a callback or notification shortly.
               </p>
             </div>
 
-            <div className="p-3 rounded-lg bg-bg-light border border-border-subtle text-xs text-left space-y-1 max-w-sm mx-auto">
-              <p className="text-text-secondary">
+            <div className="p-3 rounded-lg bg-bg-light border border-border-subtle text-xs text-left space-y-1.5 max-w-sm mx-auto">
+              <div className="flex justify-between items-center border-b border-border-subtle pb-1">
+                <span className="text-text-muted">Status</span>
+                <span className="font-bold text-success-green">{createdEnquiry?.status || "NEW"}</span>
+              </div>
+              <p className="text-text-secondary truncate">
                 <strong>Property:</strong> {property.title}
               </p>
               <p className="text-text-secondary">
@@ -91,7 +148,7 @@ export function RentEnquiryModal({
                 variant="primary"
                 size="md"
                 onClick={handleResetAndClose}
-                className="font-bold text-xs"
+                className="font-bold text-xs w-full"
               >
                 Done
               </Button>
@@ -113,6 +170,13 @@ export function RentEnquiryModal({
                 <strong className="text-primary-navy font-bold">{property.formattedRent}</strong>
               </p>
             </div>
+
+            {errorMessage && (
+              <div className="rounded-xl bg-error-red-light/70 border border-error-red/30 p-3 text-xs flex items-start gap-2 text-error-red animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -192,6 +256,7 @@ export function RentEnquiryModal({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   className="w-full rounded-lg border border-border-default bg-white p-2.5 text-xs text-text-primary focus:border-accent-gold focus:outline-none"
+                  maxLength={2000}
                 />
               </div>
 
@@ -206,6 +271,7 @@ export function RentEnquiryModal({
                 type="submit"
                 variant="primary"
                 isLoading={isLoading}
+                disabled={isLoading}
                 leftIcon={<Send className="w-4 h-4" />}
                 className="w-full h-11 text-xs font-bold shadow-soft"
               >

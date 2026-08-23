@@ -8,6 +8,7 @@ import { Button, ReraBadge, OwnerBadge, AgentBadge, NewBadge } from "@/component
 import { Property } from "@/types/property";
 import { useAuth } from "@/lib/auth/auth-context";
 import { ContactModal } from "./ContactModal";
+import { FavoriteApiService } from "@/lib/services/favorite-api";
 
 export interface PropertyCardProps {
   property: Property;
@@ -20,22 +21,46 @@ export function PropertyCard({
   className = "",
   badgeHighlight,
 }: PropertyCardProps) {
-  const { requireAuth } = useAuth();
+  const { isAuthenticated, requireAuth } = useAuth();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isTogglingFav, setIsTogglingFav] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
+
+  const executeToggleFavorite = async () => {
+    if (isTogglingFav) return;
+    setIsTogglingFav(true);
+    const nextState = !isFavorite;
+    setIsFavorite(nextState);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(property.id);
+    if (isUuid) {
+      try {
+        await FavoriteApiService.toggleFavorite(property.id, !nextState);
+      } catch {
+        setIsFavorite(!nextState); // Rollback on failure
+      } finally {
+        setIsTogglingFav(false);
+      }
+    } else {
+      setIsTogglingFav(false);
+    }
+  };
 
   const toggleFavorite = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isFavorite) {
+    if (!isAuthenticated) {
       const allowed = requireAuth({
         title: "Sign in to save properties",
         message: "Create an account to keep your favourite properties in one place.",
-        onAuthenticated: () => setIsFavorite(true),
+        onAuthenticated: () => executeToggleFavorite(),
       });
-      if (!allowed) return;
+      if (allowed) {
+        executeToggleFavorite();
+      }
+      return;
     }
-    setIsFavorite((prev) => !prev);
+    executeToggleFavorite();
   };
 
   const handleContactClick = (e: React.MouseEvent) => {
@@ -84,6 +109,7 @@ export function PropertyCard({
           <button
             type="button"
             onClick={toggleFavorite}
+            disabled={isTogglingFav}
             className="absolute top-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-xs text-text-secondary hover:text-error-red hover:bg-white shadow-soft-xs transition-colors cursor-pointer"
             aria-label={isFavorite ? "Remove from favorites" : "Save to favorites"}
           >
@@ -98,81 +124,64 @@ export function PropertyCard({
 
           {/* Bottom Gradient overlay with Locality & Ready Status */}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-dark-navy/85 via-dark-navy/30 to-transparent p-3 pt-6 flex items-end justify-between pointer-events-none">
-            <span className="text-xs font-medium text-white/95 flex items-center gap-1 truncate max-w-[65%]">
-              <MapPin className="w-3 h-3 text-accent-gold shrink-0" />
-              <span className="truncate">{property.city}</span>
-            </span>
-            <span className="text-[11px] font-medium text-white/90 bg-black/50 backdrop-blur-xs px-2 py-0.5 rounded shrink-0">
-              {property.possessionStatus}
-            </span>
+            <div className="flex items-center gap-1 text-white text-xs font-semibold drop-shadow-sm">
+              <MapPin className="h-3.5 w-3.5 text-accent-gold shrink-0" />
+              <span className="truncate max-w-[150px]">{property.location}</span>
+            </div>
+            {property.possessionStatus && (
+              <span className="rounded bg-white/20 backdrop-blur-xs px-2 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
+                {property.possessionStatus}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Card Content Body */}
+        {/* Content Body */}
         <div className="flex flex-col flex-1 p-4 justify-between space-y-3">
-          {/* Top block */}
-          <div className="space-y-2.5">
-            {/* Price & BHK Tag */}
+          <div className="space-y-1.5">
+            {/* Price row */}
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-xl font-bold text-primary-navy tracking-tight truncate">
+              <span className="text-lg font-black text-primary-navy tracking-tight">
                 {property.price}
               </span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-bg-light text-text-secondary border border-border-subtle shrink-0">
-                {property.bhk} BHK
-              </span>
             </div>
 
-            {/* Property Title & Location */}
-            <div>
-              <Link
-                href={`/property/${property.id}`}
-                title={property.title}
-                className="line-clamp-1 text-sm font-bold text-text-primary hover:text-accent-gold-hover transition-colors block"
-              >
+            {/* Title with max 2 lines clamp */}
+            <h3 className="line-clamp-2 text-sm font-bold text-text-primary group-hover:text-accent-gold-hover transition-colors leading-snug">
+              <Link href={`/property/${property.id}`} className="focus:outline-none">
                 {property.title}
               </Link>
-              <p
-                title={property.location}
-                className="line-clamp-1 text-xs text-text-secondary mt-0.5 flex items-center gap-1"
-              >
-                <MapPin className="w-3.5 h-3.5 shrink-0 text-text-muted" />
-                <span className="truncate">{property.location}</span>
-              </p>
-            </div>
+            </h3>
+          </div>
 
-            {/* Key Property Specs (Area, Bed, Bath) */}
-            <div className="grid grid-cols-3 gap-1.5 py-2 border-y border-border-subtle text-xs text-text-secondary">
-              <div className="flex items-center gap-1.5 overflow-hidden">
-                <Maximize className="w-3.5 h-3.5 text-accent-gold shrink-0" />
-                <span className="font-medium truncate">{property.carpetArea}</span>
+          {/* Key Specs Pills Grid */}
+          <div className="grid grid-cols-3 gap-2 border-y border-border-subtle py-2.5 text-xs text-text-secondary">
+            {property.bhk && (
+              <div className="flex items-center gap-1.5">
+                <BedDouble className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                <span className="font-semibold text-text-primary truncate">{property.bhk} BHK</span>
               </div>
-              <div className="flex items-center gap-1.5 overflow-hidden">
-                <BedDouble className="w-3.5 h-3.5 text-accent-gold shrink-0" />
-                <span className="font-medium truncate">{property.bhk} Beds</span>
+            )}
+            {property.bathrooms && (
+              <div className="flex items-center gap-1.5">
+                <Bath className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                <span className="font-semibold text-text-primary">{property.bathrooms} Bath</span>
               </div>
-              <div className="flex items-center gap-1.5 overflow-hidden">
-                <Bath className="w-3.5 h-3.5 text-accent-gold shrink-0" />
-                <span className="font-medium truncate">{property.bathrooms} Baths</span>
-              </div>
-            </div>
-
-            {/* Seller info line - Fixed height */}
-            <div className="flex items-center justify-between text-xs h-5">
-              <span className="text-text-muted truncate max-w-[180px]">
-                By: <strong className="text-text-primary font-medium">{property.sellerName}</strong>
-              </span>
-              <span className="text-[11px] text-text-muted shrink-0">{property.postedDate}</span>
+            )}
+            <div className="flex items-center gap-1.5 col-span-1">
+              <Maximize className="h-3.5 w-3.5 text-text-muted shrink-0" />
+              <span className="font-semibold text-text-primary truncate">{property.carpetArea}</span>
             </div>
           </div>
 
-          {/* Action Buttons: Contact & View Details */}
-          <div className="grid grid-cols-2 gap-2 pt-2 mt-auto border-t border-border-subtle/50">
+          {/* Action Footer */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
             <Button
               variant="outline"
               size="sm"
               onClick={handleContactClick}
-              leftIcon={<PhoneCall className="w-3.5 h-3.5 text-success-green" />}
-              className="text-xs font-semibold h-9"
+              leftIcon={<PhoneCall className="h-3.5 w-3.5 text-accent-gold" />}
+              className="w-full text-xs font-semibold h-9"
             >
               Contact
             </Button>

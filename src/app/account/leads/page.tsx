@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Metadata } from "next";
 import { LeadsManager } from "@/components/account/LeadsManager";
 
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AccountLeadsPage() {
-  return <LeadsManager />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-text-muted">Loading leads...</div>}>
+      <LeadsManager />
+    </Suspense>
+  );
 }
