@@ -32,6 +32,14 @@ export interface Property {
   sellerType: "owner" | "agent" | "developer";
   sellerName: string;
   sellerPhone?: string;
+  owner?: {
+    id: string;
+    name: string;
+    email?: string;
+    phone?: string | null;
+    avatarUrl?: string | null;
+    role?: string;
+  };
   isFeatured?: boolean;
   isNew?: boolean;
   image: string;

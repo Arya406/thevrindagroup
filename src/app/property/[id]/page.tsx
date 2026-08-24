@@ -21,6 +21,7 @@ import {
   Sofa,
   AlertCircle,
   RotateCcw,
+  Building2,
 } from "lucide-react";
 import {
   Container,
@@ -497,43 +498,55 @@ export default function PropertyDetailPage() {
         </div>
 
         {/* Photo Gallery Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-[360px] sm:h-[440px] md:h-[480px]">
-          {/* Main Hero Photo (8 cols) */}
-          <div className="relative lg:col-span-8 h-full rounded-2xl overflow-hidden bg-slate-100 border border-border-default group">
-            <Image
-              src={property.images[activeImageIndex] || property.image}
-              alt={`${property.title} - View ${activeImageIndex + 1}`}
-              fill
-              priority
-              className="object-cover transition-transform duration-500 group-hover:scale-102"
-            />
-            <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-xs text-white text-xs font-semibold px-3 py-1 rounded-lg">
-              {activeImageIndex + 1} / {property.images.length} Photos
+        {property.images.length > 0 || property.image ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-[360px] sm:h-[440px] md:h-[480px]">
+            {/* Main Hero Photo (8 cols or 12 cols if only 1 photo) */}
+            <div className={`relative ${property.images.length > 1 ? "lg:col-span-8" : "lg:col-span-12"} h-full rounded-2xl overflow-hidden bg-slate-100 border border-border-default group`}>
+              <Image
+                src={property.images[activeImageIndex] || property.image}
+                alt={`${property.title} - View ${activeImageIndex + 1}`}
+                fill
+                priority
+                className="object-cover transition-transform duration-500 group-hover:scale-102"
+              />
+              {property.images.length > 1 && (
+                <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-xs text-white text-xs font-semibold px-3 py-1 rounded-lg">
+                  {activeImageIndex + 1} / {property.images.length} Photos
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Thumbnail Strip (4 cols) */}
-          <div className="hidden lg:grid lg:col-span-4 grid-rows-3 gap-3 h-full">
-            {property.images.slice(0, 3).map((img, idx) => (
-              <div
-                key={idx}
-                onClick={() => setActiveImageIndex(idx)}
-                className={`relative h-full rounded-xl overflow-hidden bg-slate-100 border cursor-pointer transition-all ${
-                  activeImageIndex === idx
-                    ? "border-accent-gold ring-2 ring-accent-gold/40"
-                    : "border-border-default hover:border-text-secondary"
-                }`}
-              >
-                <Image
-                  src={img}
-                  alt={`Thumbnail ${idx + 1}`}
-                  fill
-                  className="object-cover"
-                />
+            {/* Thumbnail Strip (4 cols) */}
+            {property.images.length > 1 && (
+              <div className="hidden lg:grid lg:col-span-4 grid-rows-3 gap-3 h-full">
+                {property.images.slice(0, 3).map((img, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setActiveImageIndex(idx)}
+                    className={`relative h-full rounded-xl overflow-hidden bg-slate-100 border cursor-pointer transition-all ${
+                      activeImageIndex === idx
+                        ? "border-accent-gold ring-2 ring-accent-gold/40"
+                        : "border-border-default hover:border-text-secondary"
+                    }`}
+                  >
+                    <Image
+                      src={img}
+                      alt={`Thumbnail ${idx + 1}`}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
+        ) : (
+          <div className="w-full h-64 sm:h-80 rounded-2xl border border-border-default bg-slate-100/70 flex flex-col items-center justify-center text-slate-400 p-6 text-center select-none">
+            <Building2 className="w-12 h-12 opacity-40 mb-2" />
+            <p className="text-sm font-semibold text-slate-600">No photos uploaded for this property</p>
+            <p className="text-xs text-slate-400 mt-0.5">Contact the seller for more details or to schedule a site visit.</p>
+          </div>
+        )}
 
         {/* Content Layout: 8 cols Details + 4 cols Sticky Contact Sidebar */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

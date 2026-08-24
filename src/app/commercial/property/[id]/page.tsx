@@ -391,41 +391,51 @@ export default function CommercialDetailPage() {
         </div>
 
         {/* Media Gallery */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-3 relative aspect-16/10 rounded-2xl overflow-hidden bg-slate-200 border border-border-default shadow-soft">
-            <Image
-              src={property.images[activeImageIndex] || property.image}
-              alt={property.title}
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 75vw"
-              className="object-cover"
-            />
-          </div>
+        {property.images.length > 0 || property.image ? (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className={`${property.images.length > 1 ? "md:col-span-3" : "md:col-span-4"} relative aspect-16/10 rounded-2xl overflow-hidden bg-slate-200 border border-border-default shadow-soft`}>
+              <Image
+                src={property.images[activeImageIndex] || property.image}
+                alt={property.title}
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 75vw"
+                className="object-cover"
+              />
+            </div>
 
-          <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
-            {property.images.map((img, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => setActiveImageIndex(idx)}
-                className={`relative aspect-16/10 md:aspect-auto md:h-28 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
-                  activeImageIndex === idx
-                    ? "border-accent-gold ring-2 ring-accent-gold/30"
-                    : "border-border-default hover:border-border-dark opacity-80 hover:opacity-100"
-                }`}
-              >
-                <Image
-                  src={img}
-                  alt={`Thumbnail ${idx + 1}`}
-                  fill
-                  sizes="20vw"
-                  className="object-cover"
-                />
-              </button>
-            ))}
+            {property.images.length > 1 && (
+              <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
+                {property.images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveImageIndex(idx)}
+                    className={`relative aspect-16/10 md:aspect-auto md:h-28 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                      activeImageIndex === idx
+                        ? "border-accent-gold ring-2 ring-accent-gold/30"
+                        : "border-border-default hover:border-border-dark opacity-80 hover:opacity-100"
+                    }`}
+                  >
+                    <Image
+                      src={img}
+                      alt={`Thumbnail ${idx + 1}`}
+                      fill
+                      sizes="20vw"
+                      className="object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        ) : (
+          <div className="w-full h-64 sm:h-80 rounded-2xl border border-border-default bg-slate-100/70 flex flex-col items-center justify-center text-slate-400 p-6 text-center select-none">
+            <Building2 className="w-12 h-12 opacity-40 mb-2" />
+            <p className="text-sm font-semibold text-slate-600">No photos uploaded for this commercial property</p>
+            <p className="text-xs text-slate-400 mt-0.5">Contact the seller for more details or to schedule a site inspection.</p>
+          </div>
+        )}
 
         {/* Content & Sidebar Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4 items-start">

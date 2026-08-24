@@ -57,9 +57,7 @@ function mapPropertyToManaged(p: Property): ManagedProperty {
     city: p.city || "Bangalore",
     price: p.priceNumeric || 0,
     formattedPrice: p.price || "₹0",
-    image:
-      p.image ||
-      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
+    image: p.image || "",
     status,
     views: 0,
     enquiries: 0,
@@ -463,12 +461,19 @@ export function PropertiesManager() {
                 {/* Left: Thumbnail & Core Info */}
                 <div className="flex items-start sm:items-center gap-3.5">
                   <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-border-subtle shrink-0">
-                    <Image
-                      src={property.image}
-                      alt={property.title}
-                      fill
-                      className="object-cover"
-                    />
+                    {property.image ? (
+                      <Image
+                        src={property.image}
+                        alt={property.title}
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400 text-[10px] text-center p-1 select-none">
+                        <Building2 className="w-5 h-5 opacity-40 mb-0.5" />
+                        <span>No photo</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1">

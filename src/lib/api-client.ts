@@ -36,8 +36,12 @@ class ApiClient {
   private tokenProvider: TokenProvider | null = null;
 
   constructor(baseUrl?: string) {
-    const rawUrl = baseUrl || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-    this.baseUrl = rawUrl.replace(/\/+$/, "");
+    let rawUrl = baseUrl || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+    rawUrl = rawUrl.trim().replace(/\/+$/, "");
+    if (rawUrl && !rawUrl.endsWith("/api")) {
+      rawUrl = `${rawUrl}/api`;
+    }
+    this.baseUrl = rawUrl;
   }
 
   /**

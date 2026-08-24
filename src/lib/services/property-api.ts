@@ -186,9 +186,6 @@ export function formatIndianPrice(
  * Map backend property entity to frontend Property interface
  */
 export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
-  const fallbackImage =
-    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80";
-
   // Sort images: primary first, then by displayOrder
   const sortedImages = (bp.images || [])
     .slice()
@@ -199,7 +196,7 @@ export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
     })
     .map((img) => img.url);
 
-  const primaryImage = sortedImages[0] || fallbackImage;
+  const primaryImage = sortedImages[0] || "";
 
   // Map listingType
   let listingType: ListingType = "buy";
@@ -261,7 +258,7 @@ export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
     isFeatured: true,
     isNew: false,
     image: primaryImage,
-    images: sortedImages.length > 0 ? sortedImages : [fallbackImage],
+    images: sortedImages,
     description: bp.description,
     furnishingStatus,
     possessionStatus: "Ready to Move",
@@ -825,6 +822,22 @@ export class PropertyApiService {
     return {
       success: true,
       message: res.data?.message || "Property deleted successfully.",
+    };
+  }
+
+  /**
+   * Delete an image from an existing property -> DELETE /api/properties/:propertyId/images/:imageId
+   */
+  public static async deletePropertyImage(
+    propertyId: string,
+    imageId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const res = await apiClient.delete<{ message?: string }>(
+      `/properties/${propertyId}/images/${imageId}`
+    );
+    return {
+      success: true,
+      message: res.data?.message || "Property image deleted successfully.",
     };
   }
 }

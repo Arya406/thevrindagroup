@@ -306,7 +306,7 @@ export function Navbar() {
               className="inline-flex items-center gap-1.5 rounded-lg bg-accent-gold px-4 py-2 text-sm font-semibold text-dark-navy hover:bg-accent-gold-hover shadow-soft-xs transition-all duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-gold focus-visible:ring-offset-2"
             >
               <PlusCircle className="h-4 w-4 shrink-0" />
-              <span>Post Property</span>
+              <span>Sell Your Property</span>
               <span className="rounded bg-dark-navy/15 px-1 py-0.2 text-[10px] font-bold tracking-wider uppercase text-dark-navy">
                 FREE
               </span>
@@ -415,7 +415,7 @@ export function Navbar() {
                 className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-accent-gold px-4 py-2.5 text-sm font-semibold text-dark-navy hover:bg-accent-gold-hover shadow-soft-xs transition-all"
               >
                 <PlusCircle className="h-4 w-4" />
-                <span>Post Property</span>
+                <span>Sell Your Property</span>
                 <span className="rounded bg-dark-navy/15 px-1 py-0.2 text-[10px] font-bold uppercase text-dark-navy">
                   FREE
                 </span>

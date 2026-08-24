@@ -10,6 +10,7 @@ import {
   BedDouble,
   PhoneCall,
   Sofa,
+  Building2,
 } from "lucide-react";
 import { Button, ReraBadge, OwnerBadge, AgentBadge } from "@/components/ui";
 import { RentalProperty } from "@/types/rental";
@@ -87,13 +88,20 @@ export function RentPropertyCard({
       >
         {/* Top Image Container with Uniform 16:10 Ratio */}
         <div className="relative aspect-16/10 w-full overflow-hidden bg-slate-100 shrink-0">
-          <Image
-            src={property.image}
-            alt={property.title}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          {property.image ? (
+            <Image
+              src={property.image}
+              alt={property.title}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400 p-4 text-center select-none">
+              <Building2 className="w-8 h-8 opacity-40 mb-1" />
+              <span className="text-[11px] font-medium tracking-wide">No photos</span>
+            </div>
+          )}
 
           {/* Badges Overlay */}
           <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap items-center gap-1.5 z-10 pointer-events-none">

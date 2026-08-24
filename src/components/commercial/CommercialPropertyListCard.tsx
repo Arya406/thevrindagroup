@@ -89,13 +89,20 @@ export function CommercialPropertyListCard({
       >
         {/* Left: Image Container */}
         <div className="relative aspect-16/10 sm:aspect-auto sm:w-72 md:w-80 shrink-0 overflow-hidden bg-slate-100 min-h-[200px]">
-          <Image
-            src={property.image}
-            alt={property.title}
-            fill
-            sizes="(max-width: 640px) 100vw, 320px"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          {property.image ? (
+            <Image
+              src={property.image}
+              alt={property.title}
+              fill
+              sizes="(max-width: 640px) 100vw, 320px"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400 p-4 text-center select-none">
+              <Building2 className="w-8 h-8 opacity-40 mb-1" />
+              <span className="text-[11px] font-medium tracking-wide">No photos</span>
+            </div>
+          )}
 
           {/* Badges Overlay */}
           <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap items-center gap-1.5 z-10 pointer-events-none">
