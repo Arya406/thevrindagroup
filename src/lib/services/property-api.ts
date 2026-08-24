@@ -196,6 +196,7 @@ export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
     })
     .map((img) => img.url);
 
+  // Bug 3 Fix: If 0 photos uploaded, primaryImage is strictly "" and images is strictly []
   const primaryImage = sortedImages[0] || "";
 
   // Map listingType

@@ -31,11 +31,11 @@ export interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Buy", href: "/buy" },
-  { label: "Rent", href: "/rent" },
+  { label: "Buy Properties", href: "/buy" },
+  { label: "Rent / Lease", href: "/rent" },
   { label: "Commercial", href: "/commercial" },
-  { label: "New Projects", href: "/#new-projects" },
-  { label: "Insights", href: "/#why-thevrindagroup" },
+  { label: "Projects", href: "/#new-projects" },
+  { label: "RERA Verified", href: "/buy" },
 ];
 
 export function Navbar() {
@@ -89,7 +89,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-border-default font-sans select-none shadow-soft-xs transition-colors">
       <Container className="relative">
-        <div className="flex h-18 items-center justify-between">
+        <div className="flex h-16 items-center justify-between">
           {/* LEFT: TheVrindaGroup Official Logo / Brand */}
           <Link
             href="/"
@@ -301,12 +301,14 @@ export function Navbar() {
               </Link>
             )}
 
+           
+
             <Link
               href="/post-property"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-gold px-4 py-2 text-sm font-semibold text-dark-navy hover:bg-accent-gold-hover shadow-soft-xs transition-all duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-gold focus-visible:ring-offset-2"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-gold px-4 py-2 text-sm font-semibold text-dark-navy hover:bg-accent-gold-hover shadow-soft-xs transition-all duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-gold focus-visible:ring-offset-2 shrink-0"
             >
               <PlusCircle className="h-4 w-4 shrink-0" />
-              <span>Sell Your Property</span>
+              <span>List Your Property</span>
               <span className="rounded bg-dark-navy/15 px-1 py-0.2 text-[10px] font-bold tracking-wider uppercase text-dark-navy">
                 FREE
               </span>
@@ -415,7 +417,7 @@ export function Navbar() {
                 className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-accent-gold px-4 py-2.5 text-sm font-semibold text-dark-navy hover:bg-accent-gold-hover shadow-soft-xs transition-all"
               >
                 <PlusCircle className="h-4 w-4" />
-                <span>Sell Your Property</span>
+                <span>List Your Property</span>
                 <span className="rounded bg-dark-navy/15 px-1 py-0.2 text-[10px] font-bold uppercase text-dark-navy">
                   FREE
                 </span>

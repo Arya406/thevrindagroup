@@ -52,7 +52,7 @@ export const MOCK_CITIES: CityInfo[] = [
     state: "Tamil Nadu",
     propertyCount: "8,300+ Properties",
     image:
-      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80",
     popularLocalities: ["OMR IT Corridor", "Anna Nagar", "Adyar", "Velachery", "Sholinganallur"],
   },
 ];

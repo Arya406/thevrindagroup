@@ -31,7 +31,7 @@ export const MOCK_PROJECTS: NewProject[] = [
     possessionDate: "December 2028",
     possessionStatus: "Under Construction",
     image:
-      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80",
     reraNumber: "PRM/KA/RERA/1251/310/PR/140324/006700",
     tag: "PRE-LAUNCH OFFER",
     unitsAvailable: 48,

@@ -123,7 +123,7 @@ export function ProjectCard({ project, className = "" }: ProjectCardProps) {
               className="w-full justify-between font-bold h-10 text-xs shadow-soft-xs hover:shadow-soft"
               rightIcon={<ArrowRight className="w-4 h-4" />}
             >
-              <span>Explore Project &amp; Floor Plans</span>
+              <span>Explore Project</span>
             </Button>
           </Link>
         </div>
