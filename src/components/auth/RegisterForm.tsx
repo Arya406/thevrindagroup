@@ -110,11 +110,13 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
-        <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-accent-gold/40 shadow-soft-xs bg-white flex items-center justify-center mx-auto">
+        <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-accent-gold/40 shadow-soft-xs bg-white flex items-center justify-center mx-auto shrink-0">
           <Image
             src="/logo.jpeg"
             alt="TheVrindaGroup Logo"
             fill
+            priority
+            sizes="48px"
             className="object-cover"
           />
         </div>

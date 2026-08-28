@@ -65,6 +65,7 @@ export function Footer() {
                   src="/logo.jpeg"
                   alt="TheVrindaGroup Logo"
                   fill
+                  sizes="36px"
                   className="object-cover"
                 />
               </div>

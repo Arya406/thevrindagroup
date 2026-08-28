@@ -102,6 +102,7 @@ export function Navbar() {
                 alt="TheVrindaGroup Official Logo"
                 fill
                 priority
+                sizes="40px"
                 className="object-cover"
               />
             </div>
