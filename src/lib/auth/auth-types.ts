@@ -40,7 +40,7 @@ export interface RegisterData {
   email: string;
   phone?: string;
   password: string;
-  role: UserRole;
+  role?: UserRole;
   agencyName?: string;
   agencyWebsite?: string;
   lookingFor?: "buy" | "rent" | "both";

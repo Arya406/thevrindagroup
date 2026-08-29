@@ -21,7 +21,6 @@ import { ActiveFilters, ActiveFilterItem } from "@/components/marketplace/Active
 import { CommercialPropertyCard } from "@/components/commercial/CommercialPropertyCard";
 import { CommercialPropertyListCard } from "@/components/commercial/CommercialPropertyListCard";
 import { CoworkingSection } from "@/components/commercial/CoworkingSection";
-import { CommercialProjectsSection } from "@/components/commercial/CommercialProjectsSection";
 import { SortDropdown, SortOption } from "@/components/marketplace/SortDropdown";
 import { EmptyResults } from "@/components/marketplace/EmptyResults";
 import { PropertySkeleton } from "@/components/marketplace/PropertySkeleton";
@@ -378,7 +377,7 @@ function CommercialPageContent() {
           </Link>
           <span>/</span>
           <span className="font-semibold text-primary-navy">
-            Commercial Real Estate in India
+            Commercial Properties
           </span>
           {locationQuery && (
             <>
@@ -479,16 +478,17 @@ function CommercialPageContent() {
 
               {/* Title & Matching Count */}
               <div className="hidden sm:block">
-                <h1 className="text-base font-bold text-primary-navy">
+                <h1 className="text-base sm:text-lg font-bold text-primary-navy">
                   {locationQuery
-                    ? `Commercial Real Estate in ${locationQuery}`
-                    : "Verified Commercial Properties, Offices & Retail Spaces"}
+                    ? `Commercial Properties in ${locationQuery}`
+                    : "Commercial Properties in India"}
                 </h1>
                 <p className="text-xs text-text-secondary">
+                  Showing{" "}
                   <strong className="text-primary-navy font-bold">
                     {totalCount}
                   </strong>{" "}
-                  commercial spaces verified with enterprise compliance
+                  Commercial Properties
                 </p>
               </div>
 
@@ -629,9 +629,6 @@ function CommercialPageContent() {
 
         {/* 4. Coworking Highlights Section */}
         <CoworkingSection />
-
-        {/* 5. Commercial Projects & IT Parks */}
-        <CommercialProjectsSection />
       </Container>
 
       {/* Mobile Filters Modal */}

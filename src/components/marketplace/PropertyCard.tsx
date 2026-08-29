@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Heart, MapPin, Maximize, BedDouble, Bath, PhoneCall, Building2 } from "lucide-react";
-import { Button, ReraBadge, OwnerBadge, AgentBadge, NewBadge } from "@/components/ui";
+import { Button, OwnerBadge, AgentBadge, NewBadge } from "@/components/ui";
 import { Property } from "@/types/property";
 import { useAuth } from "@/lib/auth/auth-context";
 import { ContactModal } from "./ContactModal";
@@ -99,7 +99,6 @@ export function PropertyCard({
 
           {/* Top Badges Overlay - Clean, Non-overlapping wrap */}
           <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap items-center gap-1.5 z-10 pointer-events-none">
-            {property.isReraVerified && <ReraBadge size="sm" />}
             {property.isNew && <NewBadge size="sm" />}
             {badgeHighlight ? (
               <span className="rounded bg-accent-gold-light text-[#9E6E18] border border-accent-gold-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">

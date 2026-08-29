@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import {
   Search,
   MapPin,
@@ -105,28 +104,13 @@ export function CommercialSearchBar({
     <div
       className={`rounded-2xl border border-border-default bg-white p-3.5 sm:p-4 shadow-soft space-y-3.5 ${className}`}
     >
-      {/* Top Tabs: Buy | Rent | Commercial (Active) */}
+      {/* Commercial Segmented Mode Controls: All Modes | For Lease | For Rent | For Sale | Co-working */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle pb-2.5">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Link
-            href="/buy"
-            className="px-3.5 py-1.5 text-xs font-bold rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-light transition-all cursor-pointer"
-          >
-            Buy
-          </Link>
-          <Link
-            href="/rent"
-            className="px-3.5 py-1.5 text-xs font-bold rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-light transition-all cursor-pointer"
-          >
-            Rent
-          </Link>
-          <div className="px-3.5 py-1.5 text-xs font-bold rounded-md bg-primary-navy text-white shadow-soft-xs cursor-default flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-accent-gold" />
-            Commercial
-          </div>
+        <div className="inline-flex items-center gap-1.5 text-xs font-bold text-primary-navy">
+          <Building2 className="w-4 h-4 text-accent-gold" />
+          <span>Commercial Transaction Mode:</span>
         </div>
 
-        {/* Commercial Segmented Sub-control: For Lease | For Rent | For Sale | Co-working */}
         <div className="flex items-center p-1 bg-bg-light rounded-lg border border-border-default text-xs font-semibold">
           {[
             { id: "all", label: "All Modes" },
@@ -169,7 +153,7 @@ export function CommercialSearchBar({
             <MapPin className="absolute left-3.5 h-4 w-4 text-accent-gold pointer-events-none" />
             <input
               type="text"
-              placeholder="Search city, business district or landmark..."
+              placeholder="City, locality, or landmark..."
               value={location}
               onChange={(e) => {
                 onLocationChange(e.target.value);

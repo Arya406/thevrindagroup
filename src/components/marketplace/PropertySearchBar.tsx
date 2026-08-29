@@ -3,11 +3,9 @@
 import React, { useState } from "react";
 import { Search, MapPin, Building, IndianRupee, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui";
-import { ListingType } from "@/types/property";
 
 export interface PropertySearchBarProps {
-  listingType: ListingType;
-  onListingTypeChange: (type: ListingType) => void;
+  listingType?: string;
   location: string;
   onLocationChange: (loc: string) => void;
   propertyType: string;
@@ -56,8 +54,7 @@ const BHK_OPTIONS = [
 ];
 
 export function PropertySearchBar({
-  listingType,
-  onListingTypeChange,
+  listingType = "buy",
   location,
   onLocationChange,
   propertyType,
@@ -92,52 +89,8 @@ export function PropertySearchBar({
 
   return (
     <div
-      className={`rounded-2xl border border-border-default bg-white p-3 sm:p-4 shadow-soft space-y-3 ${className}`}
+      className={`rounded-2xl border border-border-default bg-white p-3.5 sm:p-4 shadow-soft ${className}`}
     >
-      {/* Top Tabs */}
-      <div className="flex items-center justify-between border-b border-border-subtle pb-2.5">
-        <div className="flex items-center gap-1 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => onListingTypeChange("buy")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-              listingType === "buy"
-                ? "bg-primary-navy text-white shadow-soft-xs"
-                : "text-text-secondary hover:text-text-primary hover:bg-bg-light"
-            }`}
-          >
-            Buy
-          </button>
-          <button
-            type="button"
-            onClick={() => onListingTypeChange("rent")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-              listingType === "rent"
-                ? "bg-primary-navy text-white shadow-soft-xs"
-                : "text-text-secondary hover:text-text-primary hover:bg-bg-light"
-            }`}
-          >
-            Rent
-          </button>
-          <button
-            type="button"
-            onClick={() => onListingTypeChange("commercial")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-              listingType === "commercial"
-                ? "bg-primary-navy text-white shadow-soft-xs"
-                : "text-text-secondary hover:text-text-primary hover:bg-bg-light"
-            }`}
-          >
-            Commercial
-          </button>
-        </div>
-
-        <span className="text-[11px] font-semibold text-success-green hidden sm:inline-flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-success-green animate-pulse" />
-          100% RERA Verified Listings
-        </span>
-      </div>
-
       {/* Main Search Controls Form */}
       <form
         onSubmit={(e) => {
@@ -153,7 +106,7 @@ export function PropertySearchBar({
             <MapPin className="absolute left-3.5 h-4 w-4 text-accent-gold pointer-events-none" />
             <input
               type="text"
-              placeholder="City, Locality, or Project name..."
+              placeholder="City, locality, or landmark..."
               value={location}
               onChange={(e) => {
                 onLocationChange(e.target.value);

@@ -252,8 +252,11 @@ class AuthService {
         return true;
       }
       return false;
-    } catch {
-      this.clearSession();
+    } catch (err: unknown) {
+      // ONLY clear session if refresh request receives a definitive 401/403 (invalid/expired/revoked token)
+      if (err instanceof ApiClientError && (err.statusCode === 401 || err.statusCode === 403)) {
+        this.clearSession();
+      }
       return false;
     }
   }
@@ -278,11 +281,20 @@ class AuthService {
   }
 
   /**
-   * Real Backend Profile Rehydration: GET /api/auth/me
+   * Comprehensive Session Verification with Network Safety
+   * Differentiates between:
+   * - 200 OK (Verified)
+   * - 401/403 with failed refresh (isDefinitiveFailure: true -> terminal failure)
+   * - Network error / cold start / timeout (isDefinitiveFailure: false -> preserves local session)
    */
-  public async getCurrentUser(): Promise<AuthUser | null> {
-    const token = this.getAccessToken();
-    if (!token) return null;
+  public async verifySession(): Promise<{
+    user: AuthUser | null;
+    isDefinitiveFailure: boolean;
+  }> {
+    const session = this.getSession();
+    if (!session || !session.accessToken) {
+      return { user: null, isDefinitiveFailure: false };
+    }
 
     try {
       const res = await apiClient.get<{ user: BackendAuthResponseData["user"] }>("/auth/me");
@@ -291,23 +303,72 @@ class AuthService {
         ...rawUser,
         avatar: rawUser.avatarUrl || undefined,
       };
-      // Update session user
-      const session = this.getSession();
-      if (session) {
-        session.user = user;
-        this.saveSession(session, true);
+
+      const currentSession = this.getSession();
+      if (currentSession) {
+        currentSession.user = user;
+        this.saveSession(currentSession, true);
       }
-      return user;
+      return { user, isDefinitiveFailure: false };
     } catch (err: unknown) {
-      if (err instanceof ApiClientError && err.statusCode === 401) {
-        // Try refresh
-        const refreshed = await this.refreshSession();
-        if (refreshed) {
-          return this.getCurrentUser();
+      if (err instanceof ApiClientError && (err.statusCode === 401 || err.statusCode === 403)) {
+        // Access token expired or invalid -> attempt refresh token rotation
+        const refreshToken = this.getRefreshToken();
+        if (!refreshToken) {
+          return { user: null, isDefinitiveFailure: true };
+        }
+
+        try {
+          const refreshRes = await apiClient.post<BackendRefreshResponseData>("/auth/refresh", {
+            refreshToken,
+          });
+
+          const refreshedSession = this.getSession();
+          if (refreshedSession) {
+            refreshedSession.accessToken = refreshRes.data.accessToken;
+            refreshedSession.refreshToken = refreshRes.data.refreshToken;
+            this.saveSession(refreshedSession, true);
+          }
+
+          // Retry fetching user profile with the newly rotated access token
+          const userRes = await apiClient.get<{ user: BackendAuthResponseData["user"] }>("/auth/me");
+          const rawUser = userRes.data.user;
+          const user: AuthUser = {
+            ...rawUser,
+            avatar: rawUser.avatarUrl || undefined,
+          };
+
+          if (refreshedSession) {
+            refreshedSession.user = user;
+            this.saveSession(refreshedSession, true);
+          }
+
+          return { user, isDefinitiveFailure: false };
+        } catch (refreshErr: unknown) {
+          if (
+            refreshErr instanceof ApiClientError &&
+            (refreshErr.statusCode === 401 || refreshErr.statusCode === 403)
+          ) {
+            // Refresh token is definitively invalid/revoked/expired
+            return { user: null, isDefinitiveFailure: true };
+          }
+          // Network error or 5xx during refresh -> preserve existing session
+          return { user: session.user || null, isDefinitiveFailure: false };
         }
       }
-      return null;
+
+      // Transient network error (e.g. status 0, timeout, offline, cold start)
+      // DO NOT treat as definitive failure: preserve existing locally stored session
+      return { user: session.user || null, isDefinitiveFailure: false };
     }
+  }
+
+  /**
+   * Real Backend Profile Rehydration: GET /api/auth/me
+   */
+  public async getCurrentUser(): Promise<AuthUser | null> {
+    const result = await this.verifySession();
+    return result.user;
   }
 
   public async requestPasswordReset(req: ResetPasswordRequest): Promise<{ success: boolean; message: string }> {

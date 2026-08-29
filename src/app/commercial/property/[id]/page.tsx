@@ -29,7 +29,6 @@ import {
 import {
   Container,
   Button,
-  ReraBadge,
   OwnerBadge,
   AgentBadge,
   Card,
@@ -334,7 +333,6 @@ export default function CommercialDetailPage() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border-default pb-6">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              {property.isReraVerified && <ReraBadge />}
               {property.sellerType === "owner" ? (
                 <OwnerBadge />
               ) : property.sellerType === "developer" ? (

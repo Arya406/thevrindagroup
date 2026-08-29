@@ -11,7 +11,7 @@ import {
   PhoneCall,
   Layers,
 } from "lucide-react";
-import { Button, ReraBadge, OwnerBadge, AgentBadge } from "@/components/ui";
+import { Button, OwnerBadge, AgentBadge } from "@/components/ui";
 import { CommercialProperty } from "@/types/commercial";
 import { useAuth } from "@/lib/auth/auth-context";
 import { CommercialEnquiryModal } from "./CommercialEnquiryModal";
@@ -104,7 +104,6 @@ export function CommercialPropertyCard({
 
           {/* Top Badges */}
           <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap items-center gap-1.5 z-10 pointer-events-none">
-            {property.isReraVerified && <ReraBadge size="sm" />}
             {property.sellerType === "owner" ? (
               <OwnerBadge size="sm" />
             ) : (

@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
-  ShieldCheck,
   RotateCcw,
 } from "lucide-react";
 import { CommercialFilters } from "@/types/commercial";
@@ -93,25 +92,7 @@ export function CommercialFiltersView({
         </button>
       </div>
 
-      {/* 1. RERA Verified Only Toggle */}
-      <div className="p-3 rounded-lg bg-success-green-light/60 border border-success-green-border/70 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-success-green shrink-0" />
-          <span className="text-xs font-bold text-success-green">
-            RERA Verified Assets Only
-          </span>
-        </div>
-        <input
-          type="checkbox"
-          checked={filters.isReraOnly}
-          onChange={(e) =>
-            onFilterChange({ ...filters, isReraOnly: e.target.checked })
-          }
-          className="w-4 h-4 text-success-green rounded accent-success-green cursor-pointer"
-        />
-      </div>
-
-      {/* 2. Transaction Mode */}
+      {/* 1. Transaction Mode */}
       <div className="border-b border-border-subtle pb-4 space-y-2.5">
         <button
           type="button"

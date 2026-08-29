@@ -26,7 +26,6 @@ import {
 import {
   Container,
   Button,
-  ReraBadge,
   OwnerBadge,
   AgentBadge,
   Card,
@@ -464,7 +463,6 @@ export default function PropertyDetailPage() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-5 rounded-2xl border border-border-default shadow-soft-xs">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              {property.isReraVerified && <ReraBadge size="sm" />}
               {property.sellerType === "owner" ? (
                 <OwnerBadge size="sm" />
               ) : (

@@ -147,7 +147,7 @@ export function HeroSearch({
               <MapPin className="absolute left-3.5 h-4 w-4 text-accent-gold-hover pointer-events-none shrink-0" />
               <input
                 type="text"
-                placeholder="Search city, locality, project or landmark (e.g. Bandra, Whitefield)"
+                placeholder="City, locality, or landmark (e.g. Bandra, Whitefield)"
                 value={locationQuery}
                 onChange={(e) => setLocationQuery(e.target.value)}
                 className="w-full h-11 sm:h-12 pl-10 pr-4 rounded-xl border border-border-default bg-bg-light/50 hover:bg-white focus:bg-white text-xs sm:text-sm text-text-primary placeholder:text-text-muted focus:border-accent-gold focus:ring-2 focus:ring-accent-gold/20 focus:outline-none transition-all shadow-soft-xs"

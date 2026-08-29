@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { Search, MapPin, Building, IndianRupee, ChevronDown, Sofa } from "lucide-react";
 import { Button } from "@/components/ui";
 
@@ -94,34 +93,8 @@ export function RentSearchBar({
 
   return (
     <div
-      className={`rounded-2xl border border-border-default bg-white p-3.5 sm:p-4 shadow-soft space-y-3.5 ${className}`}
+      className={`rounded-2xl border border-border-default bg-white p-3.5 sm:p-4 shadow-soft ${className}`}
     >
-      {/* Top Tabs: Buy | Rent (Active) | Commercial */}
-      <div className="flex items-center justify-between border-b border-border-subtle pb-2.5">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Link
-            href="/buy"
-            className="px-3.5 py-1.5 text-xs font-bold rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-light transition-all cursor-pointer"
-          >
-            Buy
-          </Link>
-          <div className="px-3.5 py-1.5 text-xs font-bold rounded-md bg-primary-navy text-white shadow-soft-xs cursor-default">
-            Rent / Lease
-          </div>
-          <Link
-            href="/commercial"
-            className="px-3.5 py-1.5 text-xs font-bold rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-light transition-all cursor-pointer"
-          >
-            Commercial
-          </Link>
-        </div>
-
-        <span className="text-[11px] font-semibold text-success-green hidden sm:inline-flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-success-green animate-pulse" />
-          Zero Brokerage Verified Listings
-        </span>
-      </div>
-
       {/* Main Search Controls */}
       <form
         onSubmit={(e) => {
@@ -137,7 +110,7 @@ export function RentSearchBar({
             <MapPin className="absolute left-3.5 h-4 w-4 text-accent-gold pointer-events-none" />
             <input
               type="text"
-              placeholder="Search city, locality, landmark..."
+              placeholder="City, locality, or landmark..."
               value={location}
               onChange={(e) => {
                 onLocationChange(e.target.value);

@@ -12,7 +12,7 @@ import {
   Sofa,
   Building2,
 } from "lucide-react";
-import { Button, ReraBadge, OwnerBadge, AgentBadge } from "@/components/ui";
+import { Button, OwnerBadge, AgentBadge } from "@/components/ui";
 import { RentalProperty } from "@/types/rental";
 import { useAuth } from "@/lib/auth/auth-context";
 import { RentEnquiryModal } from "./RentEnquiryModal";
@@ -105,7 +105,6 @@ export function RentPropertyCard({
 
           {/* Badges Overlay */}
           <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap items-center gap-1.5 z-10 pointer-events-none">
-            {property.isReraVerified && <ReraBadge size="sm" />}
             {property.sellerType === "owner" ? (
               <OwnerBadge size="sm" />
             ) : (

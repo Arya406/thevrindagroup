@@ -57,7 +57,7 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
   const sortParam = (searchParams.get("sort") as SortOption) || "recommended";
 
   // Local state
-  const [listingType, setListingType] = useState<ListingType>(typeParam);
+  const listingType: ListingType = typeParam;
   const [locationQuery, setLocationQuery] = useState(cityParam);
   const [propertyType, setPropertyType] = useState(propertyTypeParam);
   const [budget, setBudget] = useState(budgetParam);
@@ -309,15 +309,6 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
       });
     }
 
-    if (filters.isReraOnly) {
-      list.push({
-        id: "rera",
-        label: "RERA Verified Only",
-        category: "rera",
-        onRemove: () => setFilters((prev) => ({ ...prev, isReraOnly: false })),
-      });
-    }
-
     filters.possessionStatus.forEach((pos) => {
       list.push({
         id: `pos-${pos}`,
@@ -395,12 +386,8 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
             Home
           </Link>
           <span>/</span>
-          <span className="font-semibold text-primary-navy capitalize">
-            {listingType === "buy"
-              ? "Properties for Sale"
-              : listingType === "rent"
-              ? "Properties for Rent"
-              : "Commercial Properties"}
+          <span className="font-semibold text-primary-navy">
+            Properties For Sale
           </span>
           {locationQuery && (
             <>
@@ -413,11 +400,6 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
         {/* Top Search Bar */}
         <PropertySearchBar
           listingType={listingType}
-          onListingTypeChange={(t) => {
-            setListingType(t);
-            syncToUrl({ type: t });
-            setCurrentPage(1);
-          }}
           location={locationQuery}
           onLocationChange={setLocationQuery}
           propertyType={propertyType}
@@ -476,17 +458,13 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
 
               {/* Title & Count Display */}
               <div className="hidden sm:block">
-                <h1 className="text-base font-bold text-primary-navy">
+                <h1 className="text-base sm:text-lg font-bold text-primary-navy">
                   {locationQuery
-                    ? `Properties in ${locationQuery}`
-                    : listingType === "buy"
-                    ? "Verified Properties for Sale in India"
-                    : listingType === "rent"
-                    ? "Verified Rental Properties in India"
-                    : "Commercial Spaces for Lease & Sale"}
+                    ? `Properties for Sale in ${locationQuery}`
+                    : "Properties for Sale in India"}
                 </h1>
                 <p className="text-xs text-text-secondary">
-                  <strong className="text-primary-navy font-bold">{pagination.total}</strong> listings found from verified PostgreSQL records
+                  Showing <strong className="text-primary-navy font-bold">{pagination.total}</strong> Properties for Sale
                 </p>
               </div>
 

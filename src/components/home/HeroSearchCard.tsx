@@ -178,7 +178,7 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
                 type="text"
                 value={locationQuery}
                 onChange={(e) => setLocationQuery(e.target.value)}
-                placeholder="Search city, locality..."
+                placeholder="City, locality, or landmark..."
                 className="w-full rounded-lg border border-border-default bg-bg-light/60 hover:bg-white pl-9 pr-3 py-1.5 sm:py-2 text-xs font-medium text-text-primary placeholder:text-text-muted focus:border-dark-navy focus:bg-white focus:outline-none focus:ring-1 focus:ring-dark-navy transition-all"
               />
             </div>

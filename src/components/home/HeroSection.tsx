@@ -107,7 +107,7 @@ export function HeroSection({ onSearchSubmit }: HeroSectionProps) {
               </div>
               <div className="flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5 text-accent-gold shrink-0" />
-                <span>RERA Verified Listings</span>
+                <span>100% Verified Listings</span>
               </div>
             </div>
           </div>

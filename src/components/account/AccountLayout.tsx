@@ -14,6 +14,7 @@ import {
   PlusCircle,
   ShieldCheck,
   Lock,
+  Briefcase,
 } from "lucide-react";
 import { Button, Container } from "@/components/ui";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -24,13 +25,34 @@ export interface AccountLayoutProps {
 export function AccountLayout({ children }: AccountLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, isAuthenticated, isLoading } = useAuth();
+  const { currentUser, isAuthenticated, isLoading, isInitialized } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (isInitialized && !isLoading && !isAuthenticated) {
       router.replace(`/login?returnTo=${encodeURIComponent(pathname)}`);
     }
-  }, [isLoading, isAuthenticated, pathname, router]);
+  }, [isInitialized, isLoading, isAuthenticated, pathname, router]);
+
+  if (!isInitialized || isLoading || !currentUser) {
+    return (
+      <div className="min-h-[60vh] bg-bg-light flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 p-8 bg-white rounded-2xl shadow-soft-sm border border-border-default">
+          <div className="w-8 h-8 rounded-full border-2 border-accent-gold border-t-transparent animate-spin" />
+          <p className="text-xs font-semibold text-text-secondary">Loading Account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const canManageProperties =
+    currentUser.role === "OWNER" ||
+    currentUser.role === "AGENT" ||
+    currentUser.role === "ADMIN";
+
+  const canAccessAgentWorkspace =
+    currentUser.role === "AGENT" || currentUser.role === "ADMIN";
+
+  const canAccessAdmin = currentUser.role === "ADMIN";
 
   const navItems = [
     {
@@ -40,14 +62,13 @@ export function AccountLayout({ children }: AccountLayoutProps) {
       badge: null,
     },
     {
-      label: "My Properties",
-      href: "/account/properties",
-      icon: Building,
+      label: "Saved Properties",
+      href: "/account/saved",
+      icon: Heart,
       badge: null,
-      badgeColor: "bg-primary-navy/10 text-primary-navy",
     },
     {
-      label: "Leads & Enquiries",
+      label: "My Enquiries",
       href: "/account/leads",
       icon: Users,
       badge: null,
@@ -60,18 +81,45 @@ export function AccountLayout({ children }: AccountLayoutProps) {
       badge: null,
       badgeColor: "bg-accent-gold-light text-[#9E6E18] border border-accent-gold-muted",
     },
-    {
-      label: "Saved Properties",
-      href: "/account/saved",
-      icon: Heart,
-      badge: null,
-    },
+    ...(canManageProperties
+      ? [
+          {
+            label: "My Properties",
+            href: "/account/properties",
+            icon: Building,
+            badge: null,
+            badgeColor: "bg-primary-navy/10 text-primary-navy",
+          },
+        ]
+      : []),
     {
       label: "Profile Settings",
       href: "/account/profile",
       icon: Settings,
       badge: null,
     },
+    ...(canAccessAgentWorkspace
+      ? [
+          {
+            label: "Agent Workspace",
+            href: "/agent",
+            icon: Briefcase,
+            badge: "PRO",
+            badgeColor: "bg-blue-100 text-blue-800 border border-blue-200",
+          },
+        ]
+      : []),
+    ...(canAccessAdmin
+      ? [
+          {
+            label: "Admin Portal",
+            href: "/admin",
+            icon: ShieldCheck,
+            badge: "ADMIN",
+            badgeColor: "bg-amber-100 text-amber-900 border border-amber-300",
+          },
+        ]
+      : []),
   ];
 
   if (isLoading) {

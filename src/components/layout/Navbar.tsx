@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import {
   Menu,
   X,
@@ -18,6 +19,7 @@ import {
   ShieldCheck,
   Briefcase,
   Bell,
+  CalendarCheck,
 } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -34,12 +36,11 @@ const navItems: NavItem[] = [
   { label: "Buy Properties", href: "/buy" },
   { label: "Rent / Lease", href: "/rent" },
   { label: "Commercial", href: "/commercial" },
-  { label: "Projects", href: "/#new-projects" },
-  { label: "RERA Verified", href: "/buy" },
 ];
 
 export function Navbar() {
-  const { currentUser, isAuthenticated, logout } = useAuth();
+  const pathname = usePathname();
+  const { currentUser, isAuthenticated, isInitialized, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -119,20 +120,34 @@ export function Navbar() {
             className="hidden md:flex items-center gap-1 lg:gap-2"
             aria-label="Main Navigation"
           >
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="px-3.5 py-2 text-sm font-medium text-text-primary/90 hover:text-primary-navy hover:bg-bg-light rounded-lg transition-colors duration-150"
-              >
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive =
+                (item.href === "/buy" && (pathname === "/buy" || pathname.startsWith("/buy/") || pathname === "/properties")) ||
+                (item.href === "/rent" && (pathname === "/rent" || pathname.startsWith("/rent/"))) ||
+                (item.href === "/commercial" && (pathname === "/commercial" || pathname.startsWith("/commercial/")));
+
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`px-3.5 py-2 text-sm rounded-lg transition-colors duration-150 ${
+                    isActive
+                      ? "bg-primary-navy/10 text-primary-navy font-bold shadow-soft-xs"
+                      : "font-medium text-text-primary/90 hover:text-primary-navy hover:bg-bg-light"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* RIGHT: Actions (Auth State, Notifications & Post Property) */}
           <div className="hidden md:flex items-center gap-3">
-            {isAuthenticated && currentUser ? (
+            {!isInitialized ? (
+              /* Neutral skeleton placeholder to prevent flash and layout shift */
+              <div className="h-9 w-20 rounded-xl bg-bg-light/60 border border-border-default/30 animate-pulse" aria-hidden="true" />
+            ) : isAuthenticated && currentUser ? (
               <>
                 {/* Notification Bell Dropdown Trigger */}
                 <div className="relative">
@@ -220,12 +235,21 @@ export function Navbar() {
                     </Link>
 
                     <Link
-                      href="/account/properties"
+                      href="/account/saved"
                       onClick={() => setIsUserMenuOpen(false)}
                       className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-light rounded-xl transition-colors"
                     >
-                      <Building className="w-4 h-4 text-primary-navy" />
-                      <span>My Properties</span>
+                      <Heart className="w-4 h-4 text-error-red" />
+                      <span>Saved Properties</span>
+                    </Link>
+
+                    <Link
+                      href="/account/visits"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-light rounded-xl transition-colors"
+                    >
+                      <CalendarCheck className="w-4 h-4 text-[#9E6E18]" />
+                      <span>Scheduled Visits</span>
                     </Link>
 
                     <Link
@@ -234,17 +258,19 @@ export function Navbar() {
                       className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-light rounded-xl transition-colors"
                     >
                       <Users className="w-4 h-4 text-success-green" />
-                      <span>Leads & Enquiries</span>
+                      <span>My Enquiries</span>
                     </Link>
 
-                    <Link
-                      href="/account/saved"
-                      onClick={() => setIsUserMenuOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-light rounded-xl transition-colors"
-                    >
-                      <Heart className="w-4 h-4 text-error-red" />
-                      <span>Saved Properties</span>
-                    </Link>
+                    {(currentUser.role === "OWNER" || currentUser.role === "AGENT" || currentUser.role === "ADMIN") && (
+                      <Link
+                        href="/account/properties"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-light rounded-xl transition-colors"
+                      >
+                        <Building className="w-4 h-4 text-primary-navy" />
+                        <span>My Properties</span>
+                      </Link>
+                    )}
 
                     <Link
                       href="/account/profile"
@@ -370,20 +396,33 @@ export function Navbar() {
             aria-label="Mobile Navigation"
           >
             <nav className="flex flex-col space-y-1 pb-3">
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  onClick={closeMobileMenu}
-                  className="px-3.5 py-2.5 text-base font-medium text-text-primary hover:bg-bg-light hover:text-primary-navy rounded-lg transition-colors"
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const isActive =
+                  (item.href === "/buy" && (pathname === "/buy" || pathname.startsWith("/buy/") || pathname === "/properties")) ||
+                  (item.href === "/rent" && (pathname === "/rent" || pathname.startsWith("/rent/"))) ||
+                  (item.href === "/commercial" && (pathname === "/commercial" || pathname.startsWith("/commercial/")));
+
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={closeMobileMenu}
+                    className={`px-3.5 py-2.5 text-base rounded-lg transition-colors ${
+                      isActive
+                        ? "bg-primary-navy/10 text-primary-navy font-bold shadow-soft-xs"
+                        : "font-medium text-text-primary hover:bg-bg-light hover:text-primary-navy"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
             </nav>
 
             <div className="flex flex-col space-y-2.5 pt-3 border-t border-border-subtle">
-              {isAuthenticated && currentUser ? (
+              {!isInitialized ? (
+                <div className="h-10 w-full rounded-lg bg-bg-light/60 border border-border-default/30 animate-pulse" aria-hidden="true" />
+              ) : isAuthenticated && currentUser ? (
                 <>
                   <Link
                     href="/account"

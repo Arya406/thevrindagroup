@@ -32,9 +32,9 @@ const ADMIN_NAV_ITEMS = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { currentUser, isAuthenticated, isLoading } = useAuth();
+  const { currentUser, isAuthenticated, isLoading, isInitialized } = useAuth();
 
-  if (isLoading) {
+  if (!isInitialized || isLoading) {
     return (
       <div className="min-h-screen bg-bg-light flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 p-8 bg-white rounded-2xl shadow-soft-sm border border-border-default">

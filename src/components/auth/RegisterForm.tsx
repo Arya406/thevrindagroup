@@ -5,9 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Eye, EyeOff, Lock, Mail, User, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth/auth-context";
-import { UserRole } from "@/lib/auth/auth-types";
 
 export interface RegisterFormProps {
   onSuccess?: () => void;
@@ -29,10 +28,7 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [role, setRole] = useState<UserRole>("BUYER");
   const [lookingFor, setLookingFor] = useState<"buy" | "rent" | "both">("both");
-  const [agencyName, setAgencyName] = useState("");
-  const [agencyWebsite, setAgencyWebsite] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -64,10 +60,6 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
       errs.confirmPassword = "Passwords do not match.";
     }
 
-    if (role === "AGENT" && !agencyName.trim()) {
-      errs.agencyName = "Please enter your agency or brokerage firm name.";
-    }
-
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -79,15 +71,12 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
     if (!validate()) return;
 
     const res = await register({
-      name,
-      email,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
       phone: `+91 ${phone.replace(/[^0-9]/g, "").slice(-10)}`,
       password,
-      role,
-      agencyName: role === "AGENT" ? agencyName : undefined,
-      agencyWebsite: role === "AGENT" ? agencyWebsite : undefined,
       lookingFor,
-      intent: "list",
+      intent: "find",
     });
 
     if (res.success) {
@@ -213,74 +202,32 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
           </div>
         </div>
 
-        {/* Role Persona: Buyer vs Owner vs Agent */}
+        {/* Intent / Preference: Looking to Buy / Rent / Both */}
         <div className="space-y-1.5 pt-1">
           <label className="text-xs font-semibold text-text-secondary block">
-            I am registering as:
+            I am looking to:
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="flex gap-2">
             {[
-              {
-                id: "BUYER" as UserRole,
-                label: "Buyer / Property Seeker",
-                desc: "Looking to buy, rent, or explore properties",
-              },
-              {
-                id: "OWNER" as UserRole,
-                label: "Property Owner / Seller",
-                desc: "List, sell, or rent out your properties",
-              },
-              {
-                id: "AGENT" as UserRole,
-                label: "Real Estate Agent / Broker",
-                desc: "Channel partner, agency, or certified broker",
-              },
-            ].map((r) => (
+              { id: "both" as const, label: "Buy & Rent" },
+              { id: "buy" as const, label: "Buy Property" },
+              { id: "rent" as const, label: "Rent Property" },
+            ].map((opt) => (
               <button
-                key={r.id}
+                key={opt.id}
                 type="button"
-                onClick={() => setRole(r.id)}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  role === r.id
-                    ? "bg-primary-navy text-white border-primary-navy shadow-soft-xs"
-                    : "bg-white text-text-primary border-border-default hover:bg-bg-light"
+                onClick={() => setLookingFor(opt.id)}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  lookingFor === opt.id
+                    ? "bg-accent-gold text-dark-navy border-accent-gold shadow-soft-xs"
+                    : "bg-white text-text-secondary border-border-default hover:bg-bg-light"
                 }`}
               >
-                <strong className="text-xs block">{r.label}</strong>
-                <span className={`text-[10px] block mt-0.5 ${role === r.id ? "text-white/80" : "text-text-muted"}`}>
-                  {r.desc}
-                </span>
+                {opt.label}
               </button>
             ))}
           </div>
         </div>
-
-        {/* If Agent: Agency Details */}
-        {role === "AGENT" && (
-          <div className="p-4 rounded-xl bg-bg-light border border-border-subtle space-y-3 animate-in fade-in duration-150">
-            <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1">
-                Agency / Brokerage Firm Name *
-              </label>
-              <Input
-                placeholder="e.g. Apex Realty Partners"
-                value={agencyName}
-                onChange={(e) => setAgencyName(e.target.value)}
-                error={errors.agencyName}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1">
-                Agency Website (Optional)
-              </label>
-              <Input
-                placeholder="e.g. https://apexrealty.in"
-                value={agencyWebsite}
-                onChange={(e) => setAgencyWebsite(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Password & Confirm Password */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -340,33 +287,6 @@ export function RegisterForm({ onSuccess, showLoginLink = true }: RegisterFormPr
             {errors.confirmPassword && (
               <p className="text-[11px] text-error-red font-medium mt-1">{errors.confirmPassword}</p>
             )}
-          </div>
-        </div>
-
-        {/* Intent: Looking to Buy / Rent / Both */}
-        <div className="space-y-1.5 pt-1">
-          <label className="text-xs font-semibold text-text-secondary block">
-            I am looking to:
-          </label>
-          <div className="flex gap-2">
-            {[
-              { id: "both" as const, label: "Buy & Rent" },
-              { id: "buy" as const, label: "Buy Property" },
-              { id: "rent" as const, label: "Rent Property" },
-            ].map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setLookingFor(opt.id)}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                  lookingFor === opt.id
-                    ? "bg-accent-gold text-dark-navy border-accent-gold shadow-soft-xs"
-                    : "bg-white text-text-secondary border-border-default hover:bg-bg-light"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
           </div>
         </div>
 

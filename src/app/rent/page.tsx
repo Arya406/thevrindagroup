@@ -393,7 +393,7 @@ function RentPageContent() {
           </Link>
           <span>/</span>
           <span className="font-semibold text-primary-navy">
-            Rental Properties in India
+            Properties For Rent
           </span>
           {locationQuery && (
             <>
@@ -492,16 +492,17 @@ function RentPageContent() {
 
               {/* Title & Count */}
               <div className="hidden sm:block">
-                <h1 className="text-base font-bold text-primary-navy">
+                <h1 className="text-base sm:text-lg font-bold text-primary-navy">
                   {locationQuery
-                    ? `Flats & Houses for Rent in ${locationQuery}`
-                    : "Verified Rental Properties & Flats in India"}
+                    ? `Properties for Rent in ${locationQuery}`
+                    : "Properties for Rent in India"}
                 </h1>
                 <p className="text-xs text-text-secondary">
+                  Showing{" "}
                   <strong className="text-primary-navy font-bold">
                     {totalCount}
                   </strong>{" "}
-                  rental listings found with zero brokerage options
+                  Properties for Rent
                 </p>
               </div>
 

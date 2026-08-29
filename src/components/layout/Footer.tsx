@@ -16,8 +16,8 @@ export function Footer() {
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-bold text-white">100% RERA Verified</p>
-                <p className="text-white/60">Strict legal diligence on all listings</p>
+                <p className="font-bold text-white">100% Verified Properties</p>
+                <p className="text-white/60">Strict diligence on all platform listings</p>
               </div>
             </div>
 

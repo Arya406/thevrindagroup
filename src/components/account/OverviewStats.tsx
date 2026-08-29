@@ -10,7 +10,6 @@ import {
   Eye,
   PlusCircle,
   ArrowRight,
-  Clock,
   MapPin,
   Sparkles,
   Heart,
@@ -80,19 +79,21 @@ function mapPropertyToManaged(p: Property): ManagedProperty {
 export function OverviewStats() {
   const { currentUser, isAuthenticated } = useAuth();
   const displayName = currentUser?.name ? currentUser.name.split(" ")[0] : "Member";
-  const isBuyer = currentUser?.role === "BUYER";
+  const canManageProperties =
+    currentUser?.role === "OWNER" ||
+    currentUser?.role === "AGENT" ||
+    currentUser?.role === "ADMIN";
 
   const [realLeads, setRealLeads] = useState<Lead[]>([]);
   const [realProperties, setRealProperties] = useState<ManagedProperty[]>([]);
   const [totalEnquiriesCount, setTotalEnquiriesCount] = useState<number>(0);
   const [upcomingVisitsCount, setUpcomingVisitsCount] = useState<number>(0);
   const [activeListingsCount, setActiveListingsCount] = useState<number>(0);
-  const [pendingReviewCount, setPendingReviewCount] = useState<number>(0);
   const [savedPropertiesCount, setSavedPropertiesCount] = useState<number>(0);
 
   useEffect(() => {
     if (isAuthenticated) {
-      // 1. Fetch Enquiries
+      // 1. Fetch Enquiries (Available to all users)
       EnquiryApiService.getMyEnquiries({ limit: 5 })
         .then((res) => {
           if (res.enquiries) {
@@ -104,7 +105,7 @@ export function OverviewStats() {
           // Fallback gracefully
         });
 
-      // 2. Fetch Site Visits
+      // 2. Fetch Site Visits (Available to all users)
       SiteVisitApiService.getMySiteVisits({ limit: 10 })
         .then((res) => {
           if (res.siteVisits) {
@@ -121,7 +122,7 @@ export function OverviewStats() {
           // Fallback gracefully
         });
 
-      // 3. Fetch Favorites
+      // 3. Fetch Favorites (Available to all users)
       FavoriteApiService.getMyFavorites({ limit: 1 })
         .then((res) => {
           if (res.pagination) {
@@ -134,17 +135,15 @@ export function OverviewStats() {
           // Fallback gracefully
         });
 
-      // 4. Fetch Owner Listings (if owner/agent)
-      if (!isBuyer) {
+      // 4. Fetch Owner Listings (if user can manage properties)
+      if (canManageProperties) {
         PropertyApiService.getMyProperties({ limit: 10 })
           .then((res) => {
             if (res.properties) {
               const mapped = res.properties.map(mapPropertyToManaged);
               setRealProperties(mapped);
               const active = mapped.filter((p) => p.status === "ACTIVE").length;
-              const pending = mapped.filter((p) => p.status === "PENDING" || p.status === "DRAFT").length;
               setActiveListingsCount(active);
-              setPendingReviewCount(pending);
             }
           })
           .catch(() => {
@@ -152,13 +151,51 @@ export function OverviewStats() {
           });
       }
     }
-  }, [isAuthenticated, isBuyer]);
+  }, [isAuthenticated, canManageProperties]);
 
   const activeProperties = realProperties.filter((p) => p.status === "ACTIVE").slice(0, 3);
   const displayLeads = realLeads.slice(0, 3);
 
-  const statsList = isBuyer
+  const statsList = canManageProperties
     ? [
+        {
+          title: "Saved Properties",
+          value: savedPropertiesCount,
+          subtitle: "Shortlisted listings",
+          icon: Heart,
+          color: "text-error-red",
+          bg: "bg-error-red-light",
+          href: "/account/saved",
+        },
+        {
+          title: "My Enquiries",
+          value: totalEnquiriesCount,
+          subtitle: "Active conversations",
+          icon: Users,
+          color: "text-primary-navy",
+          bg: "bg-primary-navy/10",
+          href: "/account/leads",
+        },
+        {
+          title: "Scheduled Visits",
+          value: upcomingVisitsCount,
+          subtitle: "Upcoming walkthroughs",
+          icon: CalendarCheck,
+          color: "text-[#9E6E18]",
+          bg: "bg-accent-gold-light",
+          href: "/account/visits",
+        },
+        {
+          title: "My Active Listings",
+          value: activeListingsCount,
+          subtitle: "Live in marketplace",
+          icon: Building2,
+          color: "text-success-green",
+          bg: "bg-success-green-light",
+          href: "/account/properties",
+        },
+      ]
+    : [
         {
           title: "Saved Properties",
           value: savedPropertiesCount,
@@ -189,49 +226,11 @@ export function OverviewStats() {
         {
           title: "Account Status",
           value: "Verified",
-          subtitle: "Buyer Membership",
+          subtitle: `${currentUser?.role || "Member"} Account`,
           icon: Sparkles,
           color: "text-success-green",
           bg: "bg-success-green-light",
           href: "/account/profile",
-        },
-      ]
-    : [
-        {
-          title: "Active Listings",
-          value: activeListingsCount,
-          subtitle: "Live in Marketplace",
-          icon: Building2,
-          color: "text-primary-navy",
-          bg: "bg-primary-navy/10",
-          href: "/account/properties",
-        },
-        {
-          title: "Pending Review",
-          value: pendingReviewCount,
-          subtitle: "In Verification Queue",
-          icon: Clock,
-          color: "text-accent-gold-hover",
-          bg: "bg-accent-gold-light",
-          href: "/account/properties",
-        },
-        {
-          title: "Total Enquiries",
-          value: totalEnquiriesCount,
-          subtitle: "Verified Buyer Leads",
-          icon: Users,
-          color: "text-success-green",
-          bg: "bg-success-green-light",
-          href: "/account/leads",
-        },
-        {
-          title: "Upcoming Visits",
-          value: upcomingVisitsCount,
-          subtitle: "Scheduled on-site tours",
-          icon: CalendarCheck,
-          color: "text-[#9E6E18]",
-          bg: "bg-accent-gold-light",
-          href: "/account/visits",
         },
       ];
 
@@ -244,41 +243,41 @@ export function OverviewStats() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-accent-gold/20 text-accent-gold border border-accent-gold/30">
               <Sparkles className="w-3.5 h-3.5" />
-              {isBuyer ? "Buyer Discovery & Account Center" : "Owner & Agent Control Center"}
+              {canManageProperties ? "Owner & Seeker Command Center" : "Buyer Discovery & Account Center"}
             </div>
             <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight">
               Welcome back, {displayName}!
             </h1>
             <p className="text-xs sm:text-sm text-white/80 max-w-lg">
-              {isBuyer
-                ? "Manage your shortlisted properties, track your inquiries, and inspect upcoming site visit appointments."
-                : "Here is what is happening across your listings, buyer inquiries, and upcoming inspections today."}
+              {canManageProperties
+                ? "Manage your saved properties, track your property inquiries, inspect site visits, and oversee your marketplace listings."
+                : "Manage your shortlisted properties, track your inquiries, and inspect upcoming site visit appointments."}
             </p>
           </div>
 
-          {isBuyer ? (
-            <Link href="/buy" className="shrink-0">
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            <Link href="/buy">
               <Button
-                variant="primary"
+                variant="outline"
                 size="md"
                 leftIcon={<Search className="w-4 h-4" />}
-                className="text-xs font-bold shadow-soft-xs"
+                className="text-xs font-bold bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-soft-xs"
               >
                 Browse Properties
               </Button>
             </Link>
-          ) : (
-            <Link href="/post-property" className="shrink-0">
+
+            <Link href="/post-property">
               <Button
                 variant="primary"
                 size="md"
                 leftIcon={<PlusCircle className="w-4 h-4" />}
                 className="text-xs font-bold shadow-soft-xs"
               >
-                Post New Property
+                List Property FREE
               </Button>
             </Link>
-          )}
+          </div>
         </div>
       </div>
 

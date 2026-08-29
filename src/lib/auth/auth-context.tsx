@@ -18,11 +18,12 @@ export interface AuthModalContext {
   onAuthenticated?: () => void;
 }
 
-interface AuthContextValue {
+export interface AuthContextValue {
   currentUser: AuthUser | null;
   session: AuthSession | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isInitialized: boolean;
   login: (credentials: LoginCredentials) => Promise<AuthResponse>;
   register: (data: RegisterData) => Promise<AuthResponse>;
   logout: () => Promise<void>;
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const currentUser = session?.user || null;
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalContext, setAuthModalContext] = useState<AuthModalContext | null>(null);
@@ -58,17 +60,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    const verifyBackendSession = async () => {
-      const stored = authClient.getSession();
-      if (stored?.accessToken) {
-        const freshUser = await authClient.getCurrentUser();
-        if (isMounted && !freshUser) {
-          // Token expired or revoked
-          authClient.clearSession();
+    const initAuth = async () => {
+      try {
+        const stored = authClient.getSession();
+        if (stored?.accessToken) {
+          const verification = await authClient.verifySession();
+          if (isMounted && verification.isDefinitiveFailure) {
+            authClient.clearSession();
+          }
+        }
+      } catch {
+        // Suppress unexpected initialization errors to guarantee isInitialized flips
+      } finally {
+        if (isMounted) {
+          setIsInitialized(true);
         }
       }
     };
-    verifyBackendSession();
+
+    initAuth();
+
     return () => {
       isMounted = false;
     };
@@ -153,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         session,
         isAuthenticated: Boolean(currentUser),
         isLoading,
+        isInitialized,
         login,
         register,
         logout,

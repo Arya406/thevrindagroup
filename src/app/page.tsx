@@ -62,7 +62,7 @@ export default function HomePage() {
       {/* 7. Why Choose TheVrindaGroup (Value Pillars) */}
       <WhyVrindaGroup />
 
-      {/* 8. Top Metropolitan Cities & New Launch Projects */}
+      {/* 8. Top Metropolitan Cities */}
       <TopCitiesAndProjects onSelectCity={handleSelectCity} />
 
       {/* 9. High-Conversion Final CTA Section */}
