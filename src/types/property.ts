@@ -3,10 +3,14 @@ export type ListingType = "buy" | "rent" | "commercial";
 export type PropertyType =
   | "apartment"
   | "villa"
+  | "house"
+  | "builder-floor"
   | "plot"
   | "penthouse"
   | "commercial-office"
-  | "retail-shop";
+  | "retail-shop"
+  | "commercial"
+  | "other";
 
 export interface Property {
   id: string;
@@ -16,8 +20,8 @@ export interface Property {
   price: string;
   priceNumeric: number; // in INR
   priceUnit?: string;
-  bhk: number | string;
-  bathrooms: number;
+  bhk: number | string | null;
+  bathrooms: number | null;
   carpetArea: string; // e.g. "1,450 sq.ft"
   areaNumeric?: number;
   location: string;
@@ -31,7 +35,7 @@ export interface Property {
   reraNumber?: string;
   sellerType: "owner" | "agent" | "developer";
   sellerName: string;
-  sellerPhone?: string;
+  sellerPhone?: string | null;
   owner?: {
     id: string;
     name: string;
@@ -45,8 +49,8 @@ export interface Property {
   image: string;
   images: string[];
   description: string;
-  furnishingStatus: "Furnished" | "Semi-Furnished" | "Unfurnished" | string;
-  possessionStatus: "Ready to Move" | "Under Construction" | string;
+  furnishingStatus?: "Furnished" | "Semi-Furnished" | "Unfurnished" | string | null;
+  possessionStatus?: "Ready to Move" | "Under Construction" | string | null;
   floor?: string;
   facing?: string;
   parking?: string;

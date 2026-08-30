@@ -8,6 +8,9 @@ import {
   LoginCredentials,
   RegisterData,
   AuthResponse,
+  VerifyOtpRequest,
+  ResendOtpRequest,
+  ResetPasswordRequest,
 } from "./auth-types";
 import { authClient } from "./auth-client";
 
@@ -26,6 +29,13 @@ export interface AuthContextValue {
   isInitialized: boolean;
   login: (credentials: LoginCredentials) => Promise<AuthResponse>;
   register: (data: RegisterData) => Promise<AuthResponse>;
+  requestRegistration: (data: RegisterData) => Promise<AuthResponse>;
+  verifyOtp: (req: VerifyOtpRequest) => Promise<AuthResponse>;
+  resendOtp: (req: { target: string; type: "EMAIL_VERIFICATION" | "PHONE_VERIFICATION" | "PASSWORD_RESET" }) => Promise<{ success: boolean; message: string; error?: string }>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; message: string; error?: string }>;
+  resetPassword: (req: ResetPasswordRequest) => Promise<{ success: boolean; message: string; error?: string }>;
+  loginWithGoogle: (idToken: string) => Promise<AuthResponse>;
+  linkGoogleAccount: (idToken: string, password: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<AuthUser>) => void;
   // Auth Required Modal
@@ -111,6 +121,89 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const requestRegistration = useCallback(
+    async (data: RegisterData): Promise<AuthResponse> => {
+      setIsLoading(true);
+      try {
+        const res = await authClient.requestRegistration(data);
+        return res;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const verifyOtp = useCallback(
+    async (req: VerifyOtpRequest): Promise<AuthResponse> => {
+      setIsLoading(true);
+      try {
+        const res = await authClient.verifyOtp(req);
+        return res;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const resendOtp = useCallback(
+    async (req: ResendOtpRequest) => {
+      return authClient.resendOtp(req);
+    },
+    []
+  );
+
+  const forgotPassword = useCallback(
+    async (email: string) => {
+      setIsLoading(true);
+      try {
+        return await authClient.forgotPassword(email);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const resetPassword = useCallback(
+    async (req: ResetPasswordRequest) => {
+      setIsLoading(true);
+      try {
+        return await authClient.resetPassword(req);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const loginWithGoogle = useCallback(
+    async (idToken: string): Promise<AuthResponse> => {
+      setIsLoading(true);
+      try {
+        const res = await authClient.loginWithGoogle(idToken);
+        return res;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const linkGoogleAccount = useCallback(
+    async (idToken: string, password: string): Promise<AuthResponse> => {
+      setIsLoading(true);
+      try {
+        const res = await authClient.linkGoogleAccount(idToken, password);
+        return res;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -167,6 +260,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInitialized,
         login,
         register,
+        requestRegistration,
+        verifyOtp,
+        resendOtp,
+        forgotPassword,
+        resetPassword,
+        loginWithGoogle,
+        linkGoogleAccount,
         logout,
         updateUser,
         authModalOpen,

@@ -6,6 +6,10 @@ import { Container } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Login | TheVrindaGroup Real Estate Portal",
   description: "Sign in to manage your listed properties, leads, and shortlisted homes with TheVrindaGroup.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function LoginPage() {

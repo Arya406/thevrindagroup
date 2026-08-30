@@ -4,9 +4,10 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, KeyRound, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth/auth-context";
+import { GoogleAuthButton } from "./GoogleAuthButton";
 
 export interface LoginFormProps {
   onSuccess?: () => void;
@@ -18,12 +19,17 @@ export function LoginForm({ onSuccess, showRegisterLink = true }: LoginFormProps
   const searchParams = useSearchParams();
   const returnTo = searchParams?.get("returnTo") || "/account";
 
-  const { login, isLoading } = useAuth();
+  const { login, linkGoogleAccount, isLoading } = useAuth();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // Account Linking State
+  const [linkData, setLinkData] = useState<{ email: string; idToken: string } | null>(null);
+  const [linkPassword, setLinkPassword] = useState("");
+  const [showLinkPassword, setShowLinkPassword] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -55,7 +61,6 @@ export function LoginForm({ onSuccess, showRegisterLink = true }: LoginFormProps
     });
 
     if (res.success) {
-      // Clear password field from state
       setPassword("");
       if (onSuccess) {
         onSuccess();
@@ -68,10 +73,33 @@ export function LoginForm({ onSuccess, showRegisterLink = true }: LoginFormProps
     }
   };
 
-  const handleGoogleAuthClick = () => {
-    alert(
-      "Google OAuth 2.0 Integration: Authentication client abstraction is ready. Connect Google Client ID in production backend."
-    );
+  const handleLinkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkData || !linkPassword) return;
+
+    setGeneralError(null);
+    const res = await linkGoogleAccount(linkData.idToken, linkPassword);
+
+    if (res.success) {
+      setLinkPassword("");
+      setLinkData(null);
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push(returnTo);
+      }
+    } else {
+      setGeneralError(res.error || "Failed to link Google account. Please verify your password.");
+      setLinkPassword("");
+    }
+  };
+
+  const handleGoogleSuccess = () => {
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      router.push(returnTo);
+    }
   };
 
   return (
@@ -93,166 +121,212 @@ export function LoginForm({ onSuccess, showRegisterLink = true }: LoginFormProps
           TheVrindaGroup Verified Portal
         </div>
         <h1 className="text-xl sm:text-2xl font-extrabold text-primary-navy tracking-tight">
-          Welcome back to TheVrindaGroup
+          {linkData ? "Link Your Google Account" : "Welcome back to TheVrindaGroup"}
         </h1>
         <p className="text-xs sm:text-sm text-text-secondary">
-          Sign in to manage your properties, enquiries and saved listings.
+          {linkData
+            ? `An existing account was found for ${linkData.email}. Enter your password to securely link Google.`
+            : "Sign in to manage your properties, enquiries and saved listings."}
         </p>
       </div>
 
       {/* General Error Banner */}
       {generalError && (
-        <div className="p-3 rounded-xl bg-error-red-light border border-error-red/30 text-xs text-error-red font-medium">
-          {generalError}
+        <div className="p-3 rounded-xl bg-error-red-light border border-error-red/30 text-xs text-error-red font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{generalError}</span>
         </div>
       )}
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Email or Phone */}
-        <div>
-          <label className="text-xs font-semibold text-text-secondary block mb-1">
-            Email Address or Mobile Number *
-          </label>
-          <div className="relative flex items-center">
-            <Mail className="absolute left-3.5 h-4 w-4 text-text-muted pointer-events-none" />
-            <input
-              type="text"
-              autoComplete="username"
-              placeholder="e.g. arya.sharma@example.com or 9876543210"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              className={`w-full h-11 pl-10 pr-3 rounded-xl border text-xs font-medium focus:border-accent-gold focus:outline-none shadow-soft-xs transition-all ${
-                errors.identifier ? "border-error-red bg-error-red-light/30" : "border-border-default bg-white"
-              }`}
-            />
+      {/* Account Linking Prompt Form */}
+      {linkData ? (
+        <form onSubmit={handleLinkSubmit} className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-accent-gold-light/40 border border-accent-gold-muted text-xs text-primary-navy font-medium space-y-1">
+            <div className="font-bold flex items-center gap-1.5 text-accent-gold-hover">
+              <KeyRound className="w-4 h-4" />
+              Security Verification Required
+            </div>
+            <p className="text-text-secondary text-[11px]">
+              To protect your existing account, please confirm ownership by entering your account password.
+            </p>
           </div>
-          {errors.identifier && (
-            <p className="text-[11px] text-error-red font-medium mt-1">{errors.identifier}</p>
-          )}
-        </div>
 
-        {/* Password */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-semibold text-text-secondary block">
-              Password *
+          <div>
+            <label className="text-xs font-semibold text-text-secondary block mb-1">
+              Account Password for {linkData.email} *
             </label>
-            <Link
-              href="/forgot-password"
-              className="text-[11px] font-bold text-accent-gold-hover hover:underline"
-            >
-              Forgot Password?
-            </Link>
+            <div className="relative flex items-center">
+              <Lock className="absolute left-3.5 h-4 w-4 text-text-muted pointer-events-none" />
+              <input
+                type={showLinkPassword ? "text" : "password"}
+                placeholder="Enter existing account password"
+                value={linkPassword}
+                onChange={(e) => setLinkPassword(e.target.value)}
+                autoFocus
+                className="w-full h-11 pl-10 pr-10 rounded-xl border border-border-default bg-white text-xs font-medium focus:border-accent-gold focus:outline-none shadow-soft-xs transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowLinkPassword(!showLinkPassword)}
+                className="absolute right-3 text-text-muted hover:text-primary-navy p-1 cursor-pointer"
+              >
+                {showLinkPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <div className="relative flex items-center">
-            <Lock className="absolute left-3.5 h-4 w-4 text-text-muted pointer-events-none" />
-            <input
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={`w-full h-11 pl-10 pr-10 rounded-xl border text-xs font-medium focus:border-accent-gold focus:outline-none shadow-soft-xs transition-all ${
-                errors.password ? "border-error-red bg-error-red-light/30" : "border-border-default bg-white"
-              }`}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 text-text-muted hover:text-primary-navy p-1 cursor-pointer"
-              title={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          {errors.password && (
-            <p className="text-[11px] text-error-red font-medium mt-1">{errors.password}</p>
-          )}
-        </div>
-
-        {/* Remember Me */}
-        <div className="flex items-center justify-between pt-1 text-xs">
-          <label className="flex items-center gap-2 text-text-secondary cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-border-default accent-primary-navy cursor-pointer"
-            />
-            <span>Keep me signed in for 7 days</span>
-          </label>
-        </div>
-
-        {/* Submit CTA */}
-        <Button
-          type="submit"
-          variant="primary"
-          size="lg"
-          isLoading={isLoading}
-          rightIcon={<ArrowRight className="w-4 h-4" />}
-          className="w-full text-xs sm:text-sm font-bold shadow-soft h-11"
-        >
-          Sign In to TheVrindaGroup
-        </Button>
-      </form>
-
-      {/* Divider */}
-      <div className="relative flex items-center justify-center">
-        <div className="border-t border-border-default w-full" />
-        <span className="bg-white px-3 text-[11px] text-text-muted font-medium uppercase tracking-wider relative">
-          Or Continue With
-        </span>
-      </div>
-
-      {/* Google OAuth Button */}
-      <div>
-        <button
-          type="button"
-          onClick={handleGoogleAuthClick}
-          className="w-full h-11 rounded-xl border border-border-default bg-white hover:bg-bg-light text-text-primary text-xs font-bold flex items-center justify-center gap-2.5 shadow-soft-xs transition-all cursor-pointer active:scale-[0.99]"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path
-              fill="#4285F4"
-              d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-            />
-          </svg>
-          <span>Continue with Google</span>
-        </button>
-      </div>
-
-      {/* Register link */}
-      {showRegisterLink && (
-        <div className="text-center pt-2 border-t border-border-subtle text-xs text-text-secondary">
-          Don&apos;t have a TheVrindaGroup account?{" "}
-          <Link
-            href={`/register${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`}
-            className="font-bold text-primary-navy hover:text-accent-gold-hover hover:underline"
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            isLoading={isLoading}
+            disabled={!linkPassword.trim()}
+            className="w-full text-xs sm:text-sm font-bold shadow-soft h-11"
           >
-            Create Account Free
-          </Link>
-        </div>
-      )}
+            Verify Password & Link Google
+          </Button>
 
-      {/* Privacy note */}
-      <div className="p-3 rounded-xl bg-bg-light border border-border-subtle flex items-center gap-2 text-[11px] text-text-muted">
-        <ShieldCheck className="w-4 h-4 text-success-green shrink-0" />
-        <span>Your personal information is protected under TheVrindaGroup Security Standards.</span>
-      </div>
+          <button
+            type="button"
+            onClick={() => {
+              setLinkData(null);
+              setLinkPassword("");
+              setGeneralError(null);
+            }}
+            className="w-full text-center text-xs font-semibold text-text-secondary hover:text-primary-navy hover:underline pt-1 cursor-pointer"
+          >
+            Cancel & Return to Standard Login
+          </button>
+        </form>
+      ) : (
+        /* Standard Login Form */
+        <>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email or Phone */}
+            <div>
+              <label className="text-xs font-semibold text-text-secondary block mb-1">
+                Email Address or Mobile Number *
+              </label>
+              <div className="relative flex items-center">
+                <Mail className="absolute left-3.5 h-4 w-4 text-text-muted pointer-events-none" />
+                <input
+                  type="text"
+                  autoComplete="username"
+                  placeholder="e.g. arya.sharma@example.com or 9876543210"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  className={`w-full h-11 pl-10 pr-3 rounded-xl border text-xs font-medium focus:border-accent-gold focus:outline-none shadow-soft-xs transition-all ${
+                    errors.identifier ? "border-error-red bg-error-red-light/30" : "border-border-default bg-white"
+                  }`}
+                />
+              </div>
+              {errors.identifier && (
+                <p className="text-[11px] text-error-red font-medium mt-1">{errors.identifier}</p>
+              )}
+            </div>
+
+            {/* Password */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-text-secondary block">
+                  Password *
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-[11px] font-bold text-accent-gold-hover hover:underline"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+
+              <div className="relative flex items-center">
+                <Lock className="absolute left-3.5 h-4 w-4 text-text-muted pointer-events-none" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full h-11 pl-10 pr-10 rounded-xl border text-xs font-medium focus:border-accent-gold focus:outline-none shadow-soft-xs transition-all ${
+                    errors.password ? "border-error-red bg-error-red-light/30" : "border-border-default bg-white"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 text-text-muted hover:text-primary-navy p-1 cursor-pointer"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="text-[11px] text-error-red font-medium mt-1">{errors.password}</p>
+              )}
+            </div>
+
+            {/* Remember Me */}
+            <div className="flex items-center justify-between pt-1 text-xs">
+              <label className="flex items-center gap-2 text-text-secondary cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-border-default accent-primary-navy cursor-pointer"
+                />
+                <span>Keep me signed in for 7 days</span>
+              </label>
+            </div>
+
+            {/* Submit CTA */}
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              isLoading={isLoading}
+              rightIcon={<ArrowRight className="w-4 h-4" />}
+              className="w-full text-xs sm:text-sm font-bold shadow-soft h-11"
+            >
+              Sign In to TheVrindaGroup
+            </Button>
+          </form>
+
+          {/* Divider */}
+          <div className="relative flex items-center justify-center">
+            <div className="border-t border-border-default w-full" />
+            <span className="bg-white px-3 text-[11px] text-text-muted font-medium uppercase tracking-wider relative">
+              Or Continue With
+            </span>
+          </div>
+
+          {/* Real Google Identity Services Button */}
+          <GoogleAuthButton
+            mode="signin"
+            onSuccess={handleGoogleSuccess}
+            onError={(err) => setGeneralError(err)}
+            onLinkRequired={(data) => setLinkData(data)}
+          />
+
+          {/* Register link */}
+          {showRegisterLink && (
+            <div className="text-center pt-2 border-t border-border-subtle text-xs text-text-secondary">
+              Don&apos;t have a TheVrindaGroup account?{" "}
+              <Link
+                href={`/register${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`}
+                className="font-bold text-primary-navy hover:text-accent-gold-hover hover:underline"
+              >
+                Create Account Free
+              </Link>
+            </div>
+          )}
+
+          {/* Privacy note */}
+          <div className="p-3 rounded-xl bg-bg-light border border-border-subtle flex items-center gap-2 text-[11px] text-text-muted">
+            <ShieldCheck className="w-4 h-4 text-success-green shrink-0" />
+            <span>Your personal information is protected under TheVrindaGroup Security Standards.</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

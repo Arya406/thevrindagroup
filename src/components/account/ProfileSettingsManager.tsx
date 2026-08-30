@@ -186,7 +186,7 @@ export function ProfileSettingsManager() {
           Profile Settings
         </h1>
         <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
-          Manage your account persona, personal contact details, and notification preferences.
+          Manage your account profile details, personal contact information, and notification preferences.
         </p>
       </div>
 
@@ -262,7 +262,11 @@ export function ProfileSettingsManager() {
                 <ShieldCheck className="w-4 h-4 text-accent-gold" />
               </h3>
               <p className="text-xs text-text-muted">
-                Role: <strong className="text-primary-navy uppercase font-semibold">{role}</strong> · Verified TheVrindaGroup Member
+                {role === "ADMIN"
+                  ? "Administrator · Verified TheVrindaGroup Member"
+                  : role === "AGENT"
+                  ? "Agent Partner · Verified TheVrindaGroup Member"
+                  : "Verified TheVrindaGroup Member"}
               </p>
               <button
                 type="button"
@@ -275,28 +279,30 @@ export function ProfileSettingsManager() {
             </div>
           </div>
 
-          {/* Account Role Persona Banner */}
+          {/* Account Status Banner */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-text-secondary uppercase tracking-wider block">
-              Account Role
+              Account Status
             </label>
             <div className="p-3.5 rounded-xl border border-border-default bg-bg-light/60 flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-primary-navy block">
-                  {role === "OWNER"
-                    ? "Individual Homeowner / Property Owner"
+                  {role === "ADMIN"
+                    ? "System Administrator"
                     : role === "AGENT"
                     ? "Certified Real Estate Agent / Broker"
-                    : role === "ADMIN"
-                    ? "System Administrator"
-                    : "Property Seeker / Buyer"}
+                    : "Verified TheVrindaGroup Member"}
                 </span>
                 <span className="text-[11px] text-text-muted block mt-0.5">
-                  Assigned role permissions managed under TheVrindaGroup security guidelines.
+                  {role === "ADMIN"
+                    ? "Full administrative access and platform governance permissions."
+                    : role === "AGENT"
+                    ? "Licensed broker account with CRM lead assignment access."
+                    : "Active verified account with full access to browse, enquire, and list properties."}
                 </span>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-primary-navy/10 text-primary-navy text-[11px] font-bold uppercase">
-                {role}
+              <span className="px-2.5 py-1 rounded-full bg-success-green/10 text-success-green text-[11px] font-bold uppercase tracking-wider">
+                {role === "ADMIN" ? "ADMIN" : role === "AGENT" ? "AGENT" : "VERIFIED"}
               </span>
             </div>
           </div>

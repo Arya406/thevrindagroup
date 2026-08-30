@@ -6,6 +6,10 @@ import { Container } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Create Account | TheVrindaGroup Real Estate Portal",
   description: "Create a free account on TheVrindaGroup to list properties, schedule site visits, and connect with owners.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function RegisterPage() {

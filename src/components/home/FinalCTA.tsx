@@ -51,7 +51,7 @@ export function FinalCTA() {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 backdrop-blur-md font-bold text-base px-8 py-4 shadow-soft-xs transition-all duration-150 active:scale-[0.99]"
             >
               <PlusCircle className="w-4 h-4 text-accent-gold shrink-0" />
-              <span>Sell Your Property</span>
+              <span>List Your Property</span>
               <span className="rounded bg-accent-gold px-1.5 py-0.5 text-[10px] font-black uppercase text-dark-navy ml-1">
                 FREE
               </span>

@@ -1,15 +1,32 @@
 // ==============================================================================
-// TheVrindaGroup - Single-Page Sell / Post Property Route (/post-property)
+// TheVrindaGroup - List Your Property Route (/post-property)
+// Architecture: Transaction Selection (Sell vs Rent) -> Flow Specific Experience
 // ==============================================================================
 
 import { Metadata } from "next";
 import { Suspense } from "react";
-import { SellPropertyForm } from "@/components/sell-property/SellPropertyForm";
+import { PostPropertyContainer } from "@/components/post-property/PostPropertyContainer";
 
 export const metadata: Metadata = {
-  title: "Sell Your Property in 2 Minutes | List Online for Free | TheVrindaGroup",
+  title: "List Your Property for Sale or Rent | Free Property Listing | TheVrindaGroup",
   description:
-    "Sell or list your residential, commercial property, or plot with zero brokerage on TheVrindaGroup. Submit details in under 2 minutes and connect with verified buyers across India.",
+    "List your residential, commercial property, or plot for sale or rent with zero brokerage on TheVrindaGroup. Connect with verified buyers and tenants across India.",
+  alternates: {
+    canonical: "https://thevrindagroup.com/post-property",
+  },
+  openGraph: {
+    title: "List Your Property for Sale or Rent | TheVrindaGroup",
+    description:
+      "List your residential, commercial property, or plot for sale or rent with zero brokerage on TheVrindaGroup.",
+    url: "https://thevrindagroup.com/post-property",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "List Your Property for Sale or Rent | TheVrindaGroup",
+    description:
+      "List your residential, commercial property, or plot for sale or rent with zero brokerage on TheVrindaGroup.",
+  },
 };
 
 export default function PostPropertyPage() {
@@ -22,7 +39,7 @@ export default function PostPropertyPage() {
           </div>
         }
       >
-        <SellPropertyForm />
+        <PostPropertyContainer />
       </Suspense>
     </div>
   );

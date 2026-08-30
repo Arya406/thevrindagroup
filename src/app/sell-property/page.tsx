@@ -5,5 +5,5 @@
 import { redirect } from "next/navigation";
 
 export default function SellPropertyRedirectPage() {
-  redirect("/post-property");
+  redirect("/post-property?intent=sell");
 }

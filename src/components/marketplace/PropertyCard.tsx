@@ -161,23 +161,25 @@ export function PropertyCard({
           </div>
 
           {/* Key Specs Pills Grid */}
-          <div className="grid grid-cols-3 gap-2 border-y border-border-subtle py-2.5 text-xs text-text-secondary">
-            {property.bhk && (
-              <div className="flex items-center gap-1.5">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 border-y border-border-subtle py-2.5 text-xs text-text-secondary">
+            {property.bhk ? (
+              <div className="flex items-center gap-1.5 shrink-0">
                 <BedDouble className="h-3.5 w-3.5 text-text-muted shrink-0" />
                 <span className="font-semibold text-text-primary truncate">{property.bhk} BHK</span>
               </div>
-            )}
-            {property.bathrooms && (
-              <div className="flex items-center gap-1.5">
+            ) : null}
+            {property.bathrooms ? (
+              <div className="flex items-center gap-1.5 shrink-0">
                 <Bath className="h-3.5 w-3.5 text-text-muted shrink-0" />
                 <span className="font-semibold text-text-primary">{property.bathrooms} Bath</span>
               </div>
-            )}
-            <div className="flex items-center gap-1.5 col-span-1">
-              <Maximize className="h-3.5 w-3.5 text-text-muted shrink-0" />
-              <span className="font-semibold text-text-primary truncate">{property.carpetArea}</span>
-            </div>
+            ) : null}
+            {property.carpetArea ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Maximize className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                <span className="font-semibold text-text-primary truncate">{property.carpetArea}</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Action Footer */}

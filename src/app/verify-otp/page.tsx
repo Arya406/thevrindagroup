@@ -6,6 +6,10 @@ import { Container } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Verify OTP | TheVrindaGroup",
   description: "Verify your one-time password on TheVrindaGroup.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function VerifyOtpPage() {

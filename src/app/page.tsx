@@ -2,71 +2,59 @@
 // TheVrindaGroup - Official Homepage
 // Redesigned Trust-First Real Estate Experience
 // "Buy with Confidence. Sell with Trust."
+// Server Component with Organization & WebSite JSON-LD Structured Data
 // ==============================================================================
 
-"use client";
+import { Metadata } from "next";
+import { HomePageContent } from "@/components/home/HomePageContent";
+import { JsonLd } from "@/components/seo/JsonLd";
+import {
+  generateOrganizationSchema,
+  generateWebSiteSchema,
+} from "@/lib/seo/structured-data";
 
-import React from "react";
-import { useRouter } from "next/navigation";
-import { ListingType } from "@/types/property";
-import { HeroSection } from "@/components/home/HeroSection";
-import { FeaturedProperties } from "@/components/home/FeaturedProperties";
-import { BuyingJourney } from "@/components/home/BuyingJourney";
-import { SellingJourney } from "@/components/home/SellingJourney";
-import { WhyVrindaGroup } from "@/components/home/WhyVrindaGroup";
-import { TopCitiesAndProjects } from "@/components/home/TopCitiesAndProjects";
-import { FinalCTA } from "@/components/home/FinalCTA";
+export const metadata: Metadata = {
+  title: "TheVrindaGroup | Buy, Rent & Sell Verified Properties Across India",
+  description:
+    "India's leading real estate platform with 100% verified listings. Buy apartments, rent verified homes, lease commercial spaces, or sell with zero brokerage.",
+  alternates: {
+    canonical: "https://thevrindagroup.com",
+  },
+  openGraph: {
+    title: "TheVrindaGroup | Buy, Rent & Sell Properties in India",
+    description:
+      "Search verified apartments, houses, villas, and commercial real estate across India with TheVrindaGroup.",
+    url: "https://thevrindagroup.com",
+    siteName: "TheVrindaGroup",
+    locale: "en_IN",
+    type: "website",
+    images: [
+      {
+        url: "https://thevrindagroup.com/logo.jpeg",
+        width: 800,
+        height: 800,
+        alt: "TheVrindaGroup Real Estate Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TheVrindaGroup | Real Estate Platform",
+    description:
+      "Search verified apartments, houses, villas, and commercial real estate across India.",
+    images: ["https://thevrindagroup.com/logo.jpeg"],
+  },
+};
 
 export default function HomePage() {
-  const router = useRouter();
-
-  const handleHeroSearchSubmit = (filters: {
-    listingType: ListingType;
-    location: string;
-    propertyType: string;
-    budget: string;
-    bhk: string;
-  }) => {
-    const params = new URLSearchParams();
-    if (filters.location.trim()) params.set("city", filters.location.trim());
-    if (filters.propertyType && filters.propertyType !== "all") params.set("type", filters.propertyType);
-    if (filters.bhk && filters.bhk !== "any") params.set("bhk", filters.bhk);
-
-    if (filters.listingType === "rent") {
-      router.push(`/rent?${params.toString()}`);
-    } else if (filters.listingType === "commercial") {
-      router.push(`/commercial?${params.toString()}`);
-    } else {
-      router.push(`/buy?${params.toString()}`);
-    }
-  };
-
-  const handleSelectCity = (cityName: string) => {
-    router.push(`/buy?city=${encodeURIComponent(cityName)}`);
-  };
+  const organizationSchema = generateOrganizationSchema();
+  const websiteSchema = generateWebSiteSchema();
 
   return (
-    <div className="flex flex-col min-h-screen bg-white font-sans text-text-primary selection:bg-accent-gold/30 selection:text-dark-navy">
-      {/* 1. Full-Width Immersive Trust Hero Section with Integrated Search & Trust Strip (100svh) */}
-      <HeroSection onSearchSubmit={handleHeroSearchSubmit} />
-
-      {/* 2. Live Featured & Verified Properties */}
-      <FeaturedProperties />
-
-      {/* 5. Step-by-Step Buying Journey */}
-      <BuyingJourney />
-
-      {/* 6. Step-by-Step Selling Journey (Zero Brokerage) */}
-      <SellingJourney />
-
-      {/* 7. Why Choose TheVrindaGroup (Value Pillars) */}
-      <WhyVrindaGroup />
-
-      {/* 8. Top Metropolitan Cities */}
-      <TopCitiesAndProjects onSelectCity={handleSelectCity} />
-
-      {/* 9. High-Conversion Final CTA Section */}
-      <FinalCTA />
-    </div>
+    <>
+      <JsonLd id="organization-structured-data" data={organizationSchema} />
+      <JsonLd id="website-structured-data" data={websiteSchema} />
+      <HomePageContent />
+    </>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui";
 import { authClient } from "@/lib/auth/auth-client";
 
@@ -15,7 +15,20 @@ export function VerifyOtpForm() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resendCountdown, setResendCountdown] = useState(30);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(60);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [resendCountdown]);
 
   const handleDigitChange = (index: number, val: string) => {
     if (!/^\d*$/.test(val)) return;
@@ -40,6 +53,7 @@ export function VerifyOtpForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     const code = otp.join("");
 
     if (code.length !== 6) {
@@ -50,17 +64,39 @@ export function VerifyOtpForm() {
     setIsLoading(true);
     try {
       const res = await authClient.verifyOtp({
-        identifier: phoneParam,
+        target: phoneParam,
+        type: "PHONE_VERIFICATION",
         otp: code,
       });
 
       if (res.success) {
-        router.push(returnTo);
+        setSuccessMessage("Mobile verification successful.");
+        setTimeout(() => {
+          router.push(returnTo);
+        }, 800);
       } else {
-        setError(res.error || "Invalid OTP entered. (Use demo code: 123456)");
+        setError(res.error || "Invalid verification code. Please check and try again.");
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCountdown > 0 || isLoading) return;
+    setError(null);
+    setSuccessMessage(null);
+
+    const res = await authClient.resendOtp({
+      target: phoneParam,
+      type: "PHONE_VERIFICATION",
+    });
+
+    if (res.success) {
+      setSuccessMessage(res.message || "A new verification code has been dispatched.");
+      setResendCountdown(60);
+    } else {
+      setError(res.error || "Unable to resend verification code. Please wait before trying again.");
     }
   };
 
@@ -81,8 +117,16 @@ export function VerifyOtpForm() {
       </div>
 
       {error && (
-        <div className="p-3 rounded-xl bg-error-red-light border border-error-red/30 text-xs text-error-red font-medium text-center">
-          {error}
+        <div className="p-3.5 rounded-xl bg-error-red-light border border-error-red/30 text-xs text-error-red font-medium text-center flex items-center justify-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="p-3 rounded-xl bg-success-green-light border border-success-green-border text-xs text-success-green font-medium text-center flex items-center justify-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{successMessage}</span>
         </div>
       )}
 
@@ -104,14 +148,6 @@ export function VerifyOtpForm() {
           ))}
         </div>
 
-        {/* Demo Hint */}
-        <div className="text-center">
-          <span className="text-[11px] font-bold text-success-green bg-success-green-light px-3 py-1 rounded-full border border-success-green-border inline-flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Frontend Simulation Demo Code: 123456
-          </span>
-        </div>
-
         {/* Submit */}
         <Button
           type="submit"
@@ -129,10 +165,16 @@ export function VerifyOtpForm() {
           Didn&apos;t receive the code?{" "}
           <button
             type="button"
-            onClick={() => setResendCountdown(30)}
-            className="text-primary-navy font-bold hover:underline cursor-pointer"
+            onClick={handleResend}
+            disabled={resendCountdown > 0 || isLoading}
+            className={`font-bold inline-flex items-center gap-1 ${
+              resendCountdown > 0
+                ? "text-text-muted cursor-not-allowed"
+                : "text-primary-navy hover:underline cursor-pointer"
+            }`}
           >
-            Resend OTP ({resendCountdown}s)
+            <RefreshCw className={`w-3 h-3 ${resendCountdown > 0 ? "opacity-50" : ""}`} />
+            {resendCountdown > 0 ? `Resend OTP (${resendCountdown}s)` : "Resend OTP"}
           </button>
         </div>
       </form>

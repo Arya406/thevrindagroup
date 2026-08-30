@@ -39,6 +39,23 @@ interface BackendRefreshResponseData {
   refreshToken: string;
 }
 
+interface BackendRequestRegistrationData {
+  registrationId: string;
+  email: string;
+  phone: string | null;
+  message: string;
+}
+
+interface BackendVerifyOtpResponseData {
+  isComplete: boolean;
+  message?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  user?: BackendAuthResponseData["user"];
+  accessToken?: string;
+  refreshToken?: string;
+}
+
 class AuthService {
   private memorySession: AuthSession | null = null;
   private listeners: Array<() => void> = [];
@@ -230,6 +247,97 @@ class AuthService {
   }
 
   /**
+   * Real Backend Google Authentication: POST /api/auth/google
+   */
+  public async loginWithGoogle(idToken: string): Promise<AuthResponse> {
+    try {
+      const res = await apiClient.post<BackendAuthResponseData>("/auth/google", {
+        idToken,
+      });
+
+      const { user: rawUser, accessToken, refreshToken } = res.data;
+
+      const user: AuthUser = {
+        ...rawUser,
+        avatar: rawUser.avatarUrl || undefined,
+      };
+
+      const session: AuthSession = {
+        user,
+        accessToken,
+        refreshToken,
+      };
+
+      this.saveSession(session, true);
+
+      return {
+        success: true,
+        user,
+        session,
+        message: res.message || "Successfully authenticated with Google.",
+      };
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        return {
+          success: false,
+          error: err.message,
+          code: err.code,
+        };
+      }
+      return {
+        success: false,
+        error: "Google authentication failed. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Real Backend Account Linking with Google: POST /api/auth/google/link
+   */
+  public async linkGoogleAccount(idToken: string, password: string): Promise<AuthResponse> {
+    try {
+      const res = await apiClient.post<BackendAuthResponseData>("/auth/google/link", {
+        idToken,
+        password,
+      });
+
+      const { user: rawUser, accessToken, refreshToken } = res.data;
+
+      const user: AuthUser = {
+        ...rawUser,
+        avatar: rawUser.avatarUrl || undefined,
+      };
+
+      const session: AuthSession = {
+        user,
+        accessToken,
+        refreshToken,
+      };
+
+      this.saveSession(session, true);
+
+      return {
+        success: true,
+        user,
+        session,
+        message: res.message || "Google account linked successfully.",
+      };
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        return {
+          success: false,
+          error: err.message,
+          code: err.code,
+        };
+      }
+      return {
+        success: false,
+        error: "Failed to link Google account. Please check your credentials.",
+      };
+    }
+  }
+
+  /**
    * Real Backend Token Refresh: POST /api/auth/refresh
    */
   public async refreshSession(): Promise<boolean> {
@@ -371,25 +479,184 @@ class AuthService {
     return result.user;
   }
 
-  public async requestPasswordReset(req: ResetPasswordRequest): Promise<{ success: boolean; message: string }> {
-    return {
-      success: true,
-      message: `Password reset instructions sent for ${req.identifier}. Please check your email.`,
-    };
-  }
+  /**
+   * Staged Verification-First Registration Request: POST /api/auth/register/request
+   */
+  public async requestRegistration(data: RegisterData): Promise<AuthResponse> {
+    try {
+      const res = await apiClient.post<BackendRequestRegistrationData>("/auth/register/request", {
+        name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        phone: data.phone?.trim() || undefined,
+        password: data.password,
+        role: data.role || "BUYER",
+      });
 
-  public async verifyOtp(req: VerifyOtpRequest): Promise<AuthResponse> {
-    if (req.otp === "123456" || req.otp.length === 6) {
       return {
         success: true,
-        message: "Code verified successfully.",
+        registrationId: res.data.registrationId,
+        message: res.message || "Verification codes dispatched to your email and mobile number.",
+      };
+    } catch (err: unknown) {
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to process registration request. Please try again.";
+      return {
+        success: false,
+        error: message,
       };
     }
-    return {
-      success: false,
-      error: "Invalid 6-digit verification code. Please try again.",
-    };
+  }
+
+  /**
+   * Real Backend OTP Verification: POST /api/auth/otp/verify
+   */
+  public async verifyOtp(req: VerifyOtpRequest): Promise<AuthResponse> {
+    try {
+      const target = req.target || req.identifier;
+      if (!target) {
+        return { success: false, error: "Target destination is required for verification." };
+      }
+
+      const res = await apiClient.post<BackendVerifyOtpResponseData>("/auth/otp/verify", {
+        target,
+        type: req.type || "EMAIL_VERIFICATION",
+        otp: req.otp.trim(),
+        registrationId: req.registrationId,
+      });
+
+      if (res.data.isComplete && res.data.user && res.data.accessToken && res.data.refreshToken) {
+        const rawUser = res.data.user;
+        const user: AuthUser = {
+          ...rawUser,
+          avatar: rawUser.avatarUrl || undefined,
+        };
+
+        const session: AuthSession = {
+          user,
+          accessToken: res.data.accessToken,
+          refreshToken: res.data.refreshToken,
+        };
+
+        this.saveSession(session, true);
+
+        return {
+          success: true,
+          isComplete: true,
+          user,
+          session,
+          message: res.message || "Verification complete. Account created successfully.",
+        };
+      }
+
+      return {
+        success: true,
+        isComplete: false,
+        emailVerified: res.data.emailVerified,
+        phoneVerified: res.data.phoneVerified,
+        message: res.message || "Verification step completed.",
+      };
+    } catch (err: unknown) {
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "Invalid verification code. Please try again.";
+      return {
+        success: false,
+        error: message,
+      };
+    }
+  }
+
+  /**
+   * Real Backend Resend OTP: POST /api/auth/otp/resend
+   */
+  public async resendOtp(req: { target: string; type: "EMAIL_VERIFICATION" | "PHONE_VERIFICATION" | "PASSWORD_RESET" }): Promise<{ success: boolean; message: string; error?: string }> {
+    try {
+      const res = await apiClient.post<{ success: boolean; message: string }>("/auth/otp/resend", {
+        target: req.target.trim(),
+        type: req.type,
+      });
+
+      return {
+        success: true,
+        message: res.message || "A new verification code has been dispatched.",
+      };
+    } catch (err: unknown) {
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to resend verification code. Please wait before trying again.";
+      return {
+        success: false,
+        message,
+        error: message,
+      };
+    }
+  }
+
+  /**
+   * Real Backend Forgot Password: POST /api/auth/forgot-password
+   */
+  public async forgotPassword(email: string): Promise<{ success: boolean; message: string; error?: string }> {
+    try {
+      const res = await apiClient.post<{ success: boolean; message: string }>("/auth/forgot-password", {
+        email: email.trim().toLowerCase(),
+      });
+
+      return {
+        success: true,
+        message: res.message || "Password recovery instructions have been sent if an account exists.",
+      };
+    } catch (err: unknown) {
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to request password recovery. Please try again.";
+      return {
+        success: false,
+        message,
+        error: message,
+      };
+    }
+  }
+
+  /**
+   * Real Backend Reset Password: POST /api/auth/reset-password
+   */
+  public async resetPassword(req: ResetPasswordRequest): Promise<{ success: boolean; message: string; error?: string }> {
+    try {
+      const res = await apiClient.post<{ success: boolean; message: string }>("/auth/reset-password", {
+        email: req.email.trim().toLowerCase(),
+        token: req.token.trim(),
+        newPassword: req.newPassword,
+      });
+
+      return {
+        success: true,
+        message: res.message || "Password reset successfully. Please log in with your new password.",
+      };
+    } catch (err: unknown) {
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "Invalid or expired password reset link.";
+      return {
+        success: false,
+        message,
+        error: message,
+      };
+    }
+  }
+
+  /**
+   * Compatibility wrapper for requestPasswordReset
+   */
+  public async requestPasswordReset(req: { identifier: string }): Promise<{ success: boolean; message: string; error?: string }> {
+    return this.forgotPassword(req.identifier);
   }
 }
 
 export const authClient = new AuthService();
+

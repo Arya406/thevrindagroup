@@ -88,7 +88,7 @@ export function HeroSection({ onSearchSubmit }: HeroSectionProps) {
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/30 backdrop-blur-md font-bold text-xs sm:text-sm px-4 sm:px-4.5 py-2 shadow-soft-xs transition-all duration-150 active:scale-[0.99] shrink-0"
               >
                 <PlusCircle className="w-3.5 h-3.5 text-accent-gold shrink-0" />
-                <span>Sell Your Property</span>
+                <span>List Your Property</span>
                 <span className="rounded bg-accent-gold px-1 py-0.2 text-[9px] font-black uppercase text-dark-navy ml-0.5">
                   FREE
                 </span>

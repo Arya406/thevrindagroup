@@ -24,6 +24,7 @@ import { EmptyResults } from "@/components/marketplace/EmptyResults";
 import { PropertySkeleton } from "@/components/marketplace/PropertySkeleton";
 import { Property, ListingType } from "@/types/property";
 import { PropertyApiService, BackendPagination } from "@/lib/services/property-api";
+import { isValidStateDistrict } from "@/data/location/canonicalLocations";
 
 export interface PropertyListingsViewProps {
   defaultListingType?: ListingType;
@@ -50,15 +51,27 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
 
   // Read URL query params
   const typeParam = (searchParams.get("type") as ListingType) || defaultListingType;
+  const stateParam = searchParams.get("state") || "";
+  const districtParam = searchParams.get("district") || "";
   const cityParam = searchParams.get("city") || "";
+  const searchParam = searchParams.get("search") || "";
   const bhkParam = searchParams.get("bhk") || "any";
   const propertyTypeParam = searchParams.get("propertyType") || "all";
   const budgetParam = searchParams.get("budget") || "any";
   const sortParam = (searchParams.get("sort") as SortOption) || "recommended";
 
+  // Validate state/district combination on load
+  const isDistrictValid =
+    stateParam && districtParam
+      ? isValidStateDistrict(stateParam, districtParam)
+      : true;
+  const initialDistrict = isDistrictValid ? districtParam : "";
+
   // Local state
   const listingType: ListingType = typeParam;
-  const [locationQuery, setLocationQuery] = useState(cityParam);
+  const [selectedState, setSelectedState] = useState(stateParam);
+  const [selectedDistrict, setSelectedDistrict] = useState(initialDistrict);
+  const [locationQuery, setLocationQuery] = useState(searchParam || (cityParam && !stateParam ? cityParam : ""));
   const [propertyType, setPropertyType] = useState(propertyTypeParam);
   const [budget, setBudget] = useState(budgetParam);
   const [bhk, setBhk] = useState(bhkParam);
@@ -91,7 +104,10 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
   // Sync state to URL params cleanly
   const syncToUrl = useCallback(
     (updatedParams: {
+      state?: string;
+      district?: string;
       city?: string;
+      search?: string;
       bhk?: string;
       propertyType?: string;
       budget?: string;
@@ -99,9 +115,33 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
       type?: string;
     }) => {
       const params = new URLSearchParams(searchParams.toString());
+
+      if (updatedParams.state !== undefined) {
+        if (updatedParams.state) {
+          params.set("state", updatedParams.state);
+          params.delete("city"); // Canonical state takes precedence over legacy city
+        } else {
+          params.delete("state");
+        }
+      }
+      if (updatedParams.district !== undefined) {
+        if (updatedParams.district) {
+          params.set("district", updatedParams.district);
+          params.delete("city"); // Canonical district takes precedence over legacy city
+        } else {
+          params.delete("district");
+        }
+      }
       if (updatedParams.city !== undefined) {
-        if (updatedParams.city) params.set("city", updatedParams.city);
-        else params.delete("city");
+        if (updatedParams.city && !params.has("state") && !params.has("district")) {
+          params.set("city", updatedParams.city);
+        } else {
+          params.delete("city");
+        }
+      }
+      if (updatedParams.search !== undefined) {
+        if (updatedParams.search) params.set("search", updatedParams.search);
+        else params.delete("search");
       }
       if (updatedParams.bhk !== undefined) {
         if (updatedParams.bhk && updatedParams.bhk !== "any") params.set("bhk", updatedParams.bhk);
@@ -156,11 +196,19 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
         const activeBudget =
           filters.budgetRange !== "any" ? filters.budgetRange : budget;
 
+        const isDistValid =
+          selectedState && selectedDistrict
+            ? isValidStateDistrict(selectedState, selectedDistrict)
+            : true;
+        const activeDistrict = isDistValid ? selectedDistrict : undefined;
+
         const res = await PropertyApiService.getProperties({
+          state: selectedState || undefined,
+          district: activeDistrict || undefined,
+          city: !selectedState && !selectedDistrict && filters.city !== "All" ? filters.city : undefined,
           search: locationQuery || undefined,
           listingType,
           propertyType: activePropertyType,
-          city: filters.city !== "All" ? filters.city : undefined,
           budget: activeBudget,
           bhk: activeBhk,
           furnishingStatus: filters.furnishingStatus[0] || undefined,
@@ -195,6 +243,8 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
     };
   }, [
     listingType,
+    selectedState,
+    selectedDistrict,
     locationQuery,
     propertyType,
     budget,
@@ -209,6 +259,8 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
     setIsLoading(true);
     setFetchError(null);
     PropertyApiService.getProperties({
+      state: selectedState || undefined,
+      district: selectedDistrict || undefined,
       search: locationQuery || undefined,
       listingType,
       sort: sortOption,
@@ -235,14 +287,37 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
   const activeFilterList: ActiveFilterItem[] = useMemo(() => {
     const list: ActiveFilterItem[] = [];
 
-    if (locationQuery) {
+    // Canonical location chips
+    if (selectedState && selectedDistrict) {
       list.push({
-        id: "loc",
-        label: `Location: ${locationQuery}`,
+        id: "loc-state-district",
+        label: `Location: ${selectedDistrict}, ${selectedState}`,
+        category: "location",
+        onRemove: () => {
+          setSelectedState("");
+          setSelectedDistrict("");
+          syncToUrl({ state: "", district: "", city: "" });
+        },
+      });
+    } else if (selectedState) {
+      list.push({
+        id: "loc-state",
+        label: `Location: ${selectedState}`,
+        category: "location",
+        onRemove: () => {
+          setSelectedState("");
+          setSelectedDistrict("");
+          syncToUrl({ state: "", district: "", city: "" });
+        },
+      });
+    } else if (locationQuery) {
+      list.push({
+        id: "loc-query",
+        label: `Search: ${locationQuery}`,
         category: "location",
         onRemove: () => {
           setLocationQuery("");
-          syncToUrl({ city: "" });
+          syncToUrl({ city: "", search: "" });
         },
       });
     }
@@ -349,9 +424,11 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
     });
 
     return list;
-  }, [locationQuery, propertyType, bhk, filters, syncToUrl]);
+  }, [selectedState, selectedDistrict, locationQuery, propertyType, bhk, filters, syncToUrl]);
 
   const handleClearAll = () => {
+    setSelectedState("");
+    setSelectedDistrict("");
     setLocationQuery("");
     setPropertyType("all");
     setBudget("any");
@@ -364,7 +441,9 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
   const handleSearchSubmit = () => {
     setCurrentPage(1);
     syncToUrl({
-      city: locationQuery,
+      state: selectedState,
+      district: selectedDistrict,
+      search: locationQuery,
       bhk,
       propertyType,
       budget,
@@ -389,7 +468,15 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
           <span className="font-semibold text-primary-navy">
             Properties For Sale
           </span>
-          {locationQuery && (
+          {selectedState && (
+            <>
+              <span>/</span>
+              <span className="text-text-muted">
+                {selectedDistrict ? `${selectedDistrict}, ${selectedState}` : selectedState}
+              </span>
+            </>
+          )}
+          {!selectedState && locationQuery && (
             <>
               <span>/</span>
               <span className="text-text-muted">{locationQuery}</span>
@@ -400,8 +487,19 @@ function ListingsViewContent({ defaultListingType = "buy" }: PropertyListingsVie
         {/* Top Search Bar */}
         <PropertySearchBar
           listingType={listingType}
-          location={locationQuery}
-          onLocationChange={setLocationQuery}
+          selectedState={selectedState}
+          onStateChange={(st) => {
+            setSelectedState(st);
+            setSelectedDistrict("");
+            syncToUrl({ state: st, district: "" });
+            setCurrentPage(1);
+          }}
+          selectedDistrict={selectedDistrict}
+          onDistrictChange={(dist) => {
+            setSelectedDistrict(dist);
+            syncToUrl({ district: dist });
+            setCurrentPage(1);
+          }}
           propertyType={propertyType}
           onPropertyTypeChange={(p) => {
             setPropertyType(p);

@@ -1,14 +1,37 @@
 // ==============================================================================
 // TheVrindaGroup - Hero Floating Search Card Component
 // Compact, high-efficiency tabbed search (Buy, Rent, Commercial)
+// Enhanced with Canonical State / District Autocomplete (Phase 6)
 // ==============================================================================
 
 "use client";
 
-import React, { useState } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Search, MapPin, Building, IndianRupee, BedDouble, ChevronDown } from "lucide-react";
+import {
+  Search,
+  MapPin,
+  Building,
+  IndianRupee,
+  BedDouble,
+  ChevronDown,
+  X,
+} from "lucide-react";
 import { ListingType } from "@/types/property";
+import {
+  searchLocations,
+  LocationSearchResult,
+} from "@/data/location/canonicalLocations";
+
+const emptySubscribe = () => () => {};
 
 export interface HeroSearchCardProps {
   onSearchSubmit?: (filters: {
@@ -17,6 +40,8 @@ export interface HeroSearchCardProps {
     propertyType: string;
     budget: string;
     bhk: string;
+    state?: string;
+    district?: string;
   }) => void;
 }
 
@@ -73,18 +98,167 @@ const BHK_OPTIONS = [
 
 export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
   const router = useRouter();
+  const isMounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
   const [activeTab, setActiveTab] = useState<ListingType>("buy");
   const [locationQuery, setLocationQuery] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState<LocationSearchResult | null>(null);
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [propertyType, setPropertyType] = useState("all");
   const [budget, setBudget] = useState("any");
   const [bhk, setBhk] = useState("any");
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const budgetOptions = activeTab === "rent" ? BUDGET_OPTIONS_RENT : BUDGET_OPTIONS_BUY;
   const propertyTypeOptions =
     activeTab === "commercial" ? COMMERCIAL_PROPERTY_TYPES : RESIDENTIAL_PROPERTY_TYPES;
 
+  const suggestions = useMemo(() => {
+    if (!locationQuery || !locationQuery.trim()) return [];
+    return searchLocations(locationQuery, 6);
+  }, [locationQuery]);
+
+  const updateDropdownPosition = useCallback(() => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+
+    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+      setIsSuggestionsOpen(false);
+      return;
+    }
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const estimatedHeight = 240;
+    const showAbove = spaceBelow < estimatedHeight && rect.top > estimatedHeight;
+
+    const top = showAbove
+      ? Math.max(8, rect.top - estimatedHeight - 6)
+      : rect.bottom + 6;
+
+    setDropdownStyle({
+      position: "fixed",
+      top: `${top}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      maxHeight: showAbove
+        ? `${Math.min(240, rect.top - 16)}px`
+        : `${Math.min(240, spaceBelow - 16)}px`,
+      zIndex: 100,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isSuggestionsOpen || suggestions.length === 0) return;
+
+    updateDropdownPosition();
+
+    const handlePositionSync = () => {
+      updateDropdownPosition();
+    };
+
+    window.addEventListener("resize", handlePositionSync);
+    window.addEventListener("scroll", handlePositionSync, { passive: true, capture: true });
+
+    return () => {
+      window.removeEventListener("resize", handlePositionSync);
+      window.removeEventListener("scroll", handlePositionSync, { capture: true });
+    };
+  }, [isSuggestionsOpen, suggestions.length, updateDropdownPosition]);
+
+  useEffect(() => {
+    if (!isSuggestionsOpen) return;
+
+    const handlePointerDown = (event: PointerEvent | MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      const isInsideInput = inputRef.current && inputRef.current.contains(target);
+      const isInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target);
+
+      if (!isInsideInput && !isInsideDropdown) {
+        setIsSuggestionsOpen(false);
+        setHighlightedIndex(-1);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isSuggestionsOpen]);
+
+  const handleSelectLocation = (loc: LocationSearchResult) => {
+    setSelectedLocation(loc);
+    setLocationQuery(loc.label);
+    setIsSuggestionsOpen(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocationQuery(val);
+    setSelectedLocation(null);
+    setHighlightedIndex(-1);
+    setIsSuggestionsOpen(val.trim().length > 0);
+  };
+
+  const handleClearLocation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLocationQuery("");
+    setSelectedLocation(null);
+    setIsSuggestionsOpen(false);
+    setHighlightedIndex(-1);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isSuggestionsOpen || suggestions.length === 0) {
+      if (e.key === "ArrowDown" && locationQuery.trim().length > 0) {
+        setIsSuggestionsOpen(true);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
+    } else if (e.key === "Enter") {
+      if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+        e.preventDefault();
+        handleSelectLocation(suggestions[highlightedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setIsSuggestionsOpen(false);
+      setHighlightedIndex(-1);
+    }
+  };
+
   const handleCitySelect = (city: string) => {
-    setLocationQuery(city);
+    const matched = searchLocations(city, 5);
+    const exact = matched.find(
+      (m) =>
+        m.label.toLowerCase() === city.toLowerCase() ||
+        m.state.toLowerCase() === city.toLowerCase() ||
+        m.district?.toLowerCase() === city.toLowerCase()
+    );
+
+    if (exact) {
+      setSelectedLocation(exact);
+      setLocationQuery(exact.label);
+    } else {
+      setSelectedLocation(null);
+      setLocationQuery(city);
+    }
+    setIsSuggestionsOpen(false);
+    setHighlightedIndex(-1);
   };
 
   const handleTabChange = (tab: ListingType) => {
@@ -95,6 +269,7 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSuggestionsOpen(false);
 
     if (onSearchSubmit) {
       onSearchSubmit({
@@ -103,15 +278,31 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
         propertyType,
         budget,
         bhk,
+        ...(selectedLocation?.state ? { state: selectedLocation.state } : {}),
+        ...(selectedLocation?.district ? { district: selectedLocation.district } : {}),
       });
       return;
     }
 
-    // Build URL query parameters
     const params = new URLSearchParams();
-    if (locationQuery.trim()) params.set("city", locationQuery.trim());
-    if (propertyType !== "all") params.set("type", propertyType);
+
+    if (selectedLocation) {
+      if (selectedLocation.state) {
+        params.set("state", selectedLocation.state);
+      }
+      if (selectedLocation.district) {
+        params.set("district", selectedLocation.district);
+      }
+    } else if (locationQuery.trim()) {
+      params.set("search", locationQuery.trim());
+    }
+
+    if (propertyType !== "all") {
+      params.set("type", propertyType);
+      params.set("propertyType", propertyType);
+    }
     if (bhk !== "any") params.set("bhk", bhk);
+    if (budget !== "any") params.set("budget", budget);
 
     if (activeTab === "rent") {
       router.push(`/rent?${params.toString()}`);
@@ -124,7 +315,6 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
 
   return (
     <div id="search-card" className="w-full rounded-xl sm:rounded-2xl bg-white/98 backdrop-blur-md border border-border-default shadow-soft-xl p-3 sm:p-4 lg:p-4.5 text-left font-sans transition-all">
-      {/* Top Tabs: Buy Property | Rent / Lease | Commercial */}
       <div className="flex items-center gap-1 p-0.5 sm:p-1 rounded-lg bg-bg-light border border-border-subtle w-fit mb-2 sm:mb-2.5">
         <button
           type="button"
@@ -163,34 +353,56 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
         </button>
       </div>
 
-      {/* Search Input Form */}
       <form onSubmit={handleSearch} className="space-y-2 sm:space-y-2.5">
-        {/* Main Grid: Location, Property Type, Budget, BHK */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
-          {/* 1. Location / City / Landmark */}
-          <div className="space-y-1">
-            <label className="block text-[10px] sm:text-[11px] font-bold text-text-secondary uppercase tracking-wider">
+          <div className="space-y-1 relative">
+            <label
+              htmlFor="home-location-input"
+              className="block text-[10px] sm:text-[11px] font-bold text-text-secondary uppercase tracking-wider"
+            >
               Location / City / Landmark
             </label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold" />
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold pointer-events-none" />
               <input
+                id="home-location-input"
+                ref={inputRef}
                 type="text"
+                role="combobox"
+                aria-expanded={isSuggestionsOpen && suggestions.length > 0}
+                aria-haspopup="listbox"
+                aria-controls="home-location-suggestions"
                 value={locationQuery}
-                onChange={(e) => setLocationQuery(e.target.value)}
-                placeholder="City, locality, or landmark..."
-                className="w-full rounded-lg border border-border-default bg-bg-light/60 hover:bg-white pl-9 pr-3 py-1.5 sm:py-2 text-xs font-medium text-text-primary placeholder:text-text-muted focus:border-dark-navy focus:bg-white focus:outline-none focus:ring-1 focus:ring-dark-navy transition-all"
+                onChange={handleLocationChange}
+                onFocus={() => {
+                  if (locationQuery.trim().length > 0 && suggestions.length > 0) {
+                    setIsSuggestionsOpen(true);
+                  }
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder="City, district or state..."
+                autoComplete="off"
+                className="w-full rounded-lg border border-border-default bg-bg-light/60 hover:bg-white pl-9 pr-8 py-1.5 sm:py-2 text-xs font-medium text-text-primary placeholder:text-text-muted focus:border-dark-navy focus:bg-white focus:outline-none focus:ring-1 focus:ring-dark-navy transition-all"
               />
+              {locationQuery.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearLocation}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-dark-navy transition-colors p-0.5 rounded-full hover:bg-bg-light"
+                  aria-label="Clear location"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
-          {/* 2. Property Type */}
           <div className="space-y-1">
             <label className="block text-[10px] sm:text-[11px] font-bold text-text-secondary uppercase tracking-wider">
               Property Type
             </label>
             <div className="relative">
-              <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold" />
+              <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold pointer-events-none" />
               <select
                 value={propertyType}
                 onChange={(e) => setPropertyType(e.target.value)}
@@ -206,13 +418,12 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
             </div>
           </div>
 
-          {/* 3. Budget */}
           <div className="space-y-1">
             <label className="block text-[10px] sm:text-[11px] font-bold text-text-secondary uppercase tracking-wider">
               Budget Range
             </label>
             <div className="relative">
-              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold" />
+              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold pointer-events-none" />
               <select
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
@@ -228,14 +439,13 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
             </div>
           </div>
 
-          {/* 4. BHK Configuration (Residential) or Primary Search CTA */}
           {activeTab !== "commercial" ? (
             <div className="space-y-1">
               <label className="block text-[10px] sm:text-[11px] font-bold text-text-secondary uppercase tracking-wider">
                 BHK Configuration
               </label>
               <div className="relative">
-                <BedDouble className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold" />
+                <BedDouble className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-gold pointer-events-none" />
                 <select
                   value={bhk}
                   onChange={(e) => setBhk(e.target.value)}
@@ -263,7 +473,6 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
           )}
         </div>
 
-        {/* Popular Cities Pills & Action Row */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-2 border-t border-border-default/60">
           <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
             <span className="text-[10px] sm:text-[11px] font-semibold text-text-secondary mr-0.5">Popular:</span>
@@ -273,7 +482,9 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
                 type="button"
                 onClick={() => handleCitySelect(c)}
                 className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${
-                  locationQuery.toLowerCase() === c.toLowerCase()
+                  locationQuery.toLowerCase() === c.toLowerCase() ||
+                  (selectedLocation?.district?.toLowerCase() === c.toLowerCase()) ||
+                  (selectedLocation?.state?.toLowerCase() === c.toLowerCase())
                     ? "bg-dark-navy text-accent-gold shadow-soft-xs"
                     : "bg-bg-light text-text-secondary hover:bg-border-default/60 hover:text-dark-navy"
                 }`}
@@ -294,6 +505,76 @@ export function HeroSearchCard({ onSearchSubmit }: HeroSearchCardProps) {
           )}
         </div>
       </form>
+
+      {isMounted &&
+        isSuggestionsOpen &&
+        suggestions.length > 0 &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            role="listbox"
+            id="home-location-suggestions"
+            style={dropdownStyle}
+            className="rounded-xl bg-white border border-border-default shadow-soft-2xl overflow-hidden py-1 overflow-y-auto animate-in fade-in zoom-in-95 duration-100"
+          >
+            {suggestions.map((item, index) => {
+              const isHighlighted = highlightedIndex === index;
+              const isState = item.type === "STATE";
+
+              return (
+                <button
+                  key={`${item.state}-${item.district || "state"}-${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={isHighlighted}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    handleSelectLocation(item);
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleSelectLocation(item);
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  className={`w-full px-3 py-2 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer border-b last:border-b-0 border-border-subtle/40 ${
+                    isHighlighted
+                      ? "bg-bg-light text-dark-navy"
+                      : "hover:bg-bg-light/60 text-text-primary"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <MapPin
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        isHighlighted ? "text-dark-navy" : "text-accent-gold"
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-baseline gap-1.5 truncate">
+                        <span className="text-xs font-semibold text-dark-navy">
+                          {isState ? item.state : item.district}
+                        </span>
+                        {!isState && (
+                          <span className="text-[11px] text-text-secondary">
+                            {item.state}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-text-muted">
+                        {isState ? "State / Union Territory" : `District · ${item.state}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-[9px] font-medium text-text-muted uppercase tracking-wider shrink-0">
+                    {isState ? "State" : "District"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

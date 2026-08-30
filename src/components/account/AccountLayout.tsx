@@ -44,11 +44,6 @@ export function AccountLayout({ children }: AccountLayoutProps) {
     );
   }
 
-  const canManageProperties =
-    currentUser.role === "OWNER" ||
-    currentUser.role === "AGENT" ||
-    currentUser.role === "ADMIN";
-
   const canAccessAgentWorkspace =
     currentUser.role === "AGENT" || currentUser.role === "ADMIN";
 
@@ -81,17 +76,13 @@ export function AccountLayout({ children }: AccountLayoutProps) {
       badge: null,
       badgeColor: "bg-accent-gold-light text-[#9E6E18] border border-accent-gold-muted",
     },
-    ...(canManageProperties
-      ? [
-          {
-            label: "My Properties",
-            href: "/account/properties",
-            icon: Building,
-            badge: null,
-            badgeColor: "bg-primary-navy/10 text-primary-navy",
-          },
-        ]
-      : []),
+    {
+      label: "My Properties",
+      href: "/account/properties",
+      icon: Building,
+      badge: null,
+      badgeColor: "bg-primary-navy/10 text-primary-navy",
+    },
     {
       label: "Profile Settings",
       href: "/account/profile",
@@ -176,8 +167,12 @@ export function AccountLayout({ children }: AccountLayoutProps) {
                   {currentUser.name}
                   <ShieldCheck className="w-3.5 h-3.5 text-accent-gold" />
                 </h2>
-                <span className="text-[10px] font-semibold text-text-muted capitalize">
-                  {currentUser.role} Account • Verified
+                <span className="text-[10px] font-semibold text-text-muted">
+                  {currentUser.role === "ADMIN"
+                    ? "Administrator"
+                    : currentUser.role === "AGENT"
+                    ? "Agent Partner"
+                    : "Verified Member"}
                 </span>
               </div>
             </div>
@@ -252,8 +247,12 @@ export function AccountLayout({ children }: AccountLayoutProps) {
                   <p className="text-[11px] text-text-muted truncate">
                     {currentUser.email}
                   </p>
-                  <span className="inline-block text-[10px] font-bold px-2 py-0.2 rounded bg-bg-light border border-border-subtle text-text-secondary mt-1 uppercase tracking-wide">
-                    {currentUser.role} Account
+                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-bg-light border border-border-subtle text-text-secondary mt-1 uppercase tracking-wide">
+                    {currentUser.role === "ADMIN"
+                      ? "Administrator"
+                      : currentUser.role === "AGENT"
+                      ? "Agent Partner"
+                      : "Verified Member"}
                   </span>
                 </div>
               </div>

@@ -47,6 +47,7 @@ export interface BackendPropertyOwner {
   name: string;
   avatarUrl: string | null;
   role: "BUYER" | "OWNER" | "AGENT" | "ADMIN";
+  phone?: string | null;
 }
 
 export interface BackendProperty {
@@ -140,6 +141,8 @@ export interface PropertyFilterParams {
   propertyType?: string;
   city?: string;
   locality?: string;
+  state?: string;
+  district?: string;
   budget?: string;
   areaRange?: string;
   minPrice?: number;
@@ -196,7 +199,7 @@ export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
     })
     .map((img) => img.url);
 
-  // Bug 3 Fix: If 0 photos uploaded, primaryImage is strictly "" and images is strictly []
+  // If 0 photos uploaded, primaryImage is strictly "" and images is strictly []
   const primaryImage = sortedImages[0] || "";
 
   // Map listingType
@@ -204,31 +207,42 @@ export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
   if (bp.listingType === "RENT") listingType = "rent";
   else if (bp.listingType === "LEASE") listingType = "commercial";
 
-  // Map propertyType to frontend UI categories
+  // Map propertyType to frontend UI categories accurately
   let propertyType: PropertyType = "apartment";
   const pt = bp.propertyType?.toUpperCase();
-  if (pt === "VILLA" || pt === "HOUSE") propertyType = "villa";
+  if (pt === "HOUSE") propertyType = "house";
+  else if (pt === "VILLA") propertyType = "villa";
+  else if (pt === "BUILDER_FLOOR" || pt === "BUILDER-FLOOR") propertyType = "builder-floor";
   else if (pt === "PLOT" || pt === "LAND") propertyType = "plot";
   else if (pt === "PENTHOUSE") propertyType = "penthouse";
   else if (pt === "OFFICE") propertyType = "commercial-office";
   else if (pt === "SHOP" || pt === "SHOWROOM") propertyType = "retail-shop";
+  else if (pt === "COMMERCIAL" || pt === "WAREHOUSE") propertyType = "commercial";
+  else if (pt === "OTHER") propertyType = "other";
+  else propertyType = "apartment";
 
-  // Map Furnishing
-  let furnishingStatus: "Furnished" | "Semi-Furnished" | "Unfurnished" = "Unfurnished";
+  // Map Furnishing (null remains null)
+  let furnishingStatus: "Furnished" | "Semi-Furnished" | "Unfurnished" | null = null;
   if (bp.furnishingStatus === "FULLY_FURNISHED") furnishingStatus = "Furnished";
   else if (bp.furnishingStatus === "SEMI_FURNISHED") furnishingStatus = "Semi-Furnished";
+  else if (bp.furnishingStatus === "UNFURNISHED") furnishingStatus = "Unfurnished";
 
-  // Map Amenities list
+  // Map Amenities list (Zero fallbacks)
   const amenitiesList = (bp.amenities || [])
-    .map((pa) => pa.amenity?.name)
-    .filter((name): name is string => Boolean(name));
+    .map(
+      (
+        pa: { name?: string; slug?: string; amenity?: { name?: string } } | string
+      ) => (typeof pa === "string" ? pa : pa?.name || pa?.amenity?.name || "")
+    )
+    .filter((name): name is string => Boolean(name && name.trim().length > 0));
 
   const locality = bp.location?.locality || "";
-  const city = bp.location?.city || "Bangalore";
+  const city = bp.location?.city || "";
   const address = bp.location?.address || "";
-  const displayLocation = locality ? `${locality}, ${city}` : city;
+  const displayLocation = locality && city ? `${locality}, ${city}` : locality || city;
 
-  const bhkValue = bp.bedrooms !== null && bp.bedrooms !== undefined ? bp.bedrooms : 2;
+  const bhkValue = bp.bedrooms !== null && bp.bedrooms !== undefined ? bp.bedrooms : null;
+  const bathroomsValue = bp.bathrooms !== null && bp.bathrooms !== undefined ? bp.bathrooms : null;
 
   return {
     id: bp.id,
@@ -239,15 +253,17 @@ export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
     priceNumeric: bp.price,
     priceUnit: bp.priceUnit,
     bhk: bhkValue,
-    bathrooms: bp.bathrooms || 2,
-    carpetArea: `${bp.area.toLocaleString("en-IN")} ${
-      bp.areaUnit === "SQ_FT" ? "sq.ft" : bp.areaUnit.toLowerCase()
-    }`,
+    bathrooms: bathroomsValue,
+    carpetArea: bp.area
+      ? `${bp.area.toLocaleString("en-IN")} ${
+          bp.areaUnit === "SQ_FT" ? "sq.ft" : bp.areaUnit.toLowerCase()
+        }`
+      : "",
     areaNumeric: bp.area,
     location: displayLocation,
     city: city,
-    state: bp.location?.state || "Karnataka",
-    pincode: bp.location?.pincode || "560001",
+    state: bp.location?.state || "",
+    pincode: bp.location?.pincode || "",
     address: address || displayLocation,
     propertyType,
     listingType,
@@ -255,18 +271,15 @@ export function mapBackendPropertyToFrontend(bp: BackendProperty): Property {
     reraNumber: bp.referenceCode,
     sellerType: bp.owner?.role === "AGENT" ? "agent" : "owner",
     sellerName: bp.owner?.name || "TheVrindaGroup Verified Seller",
-    sellerPhone: "+91 98765 43210",
+    sellerPhone: bp.owner?.phone || null,
     isFeatured: true,
     isNew: false,
     image: primaryImage,
     images: sortedImages,
-    description: bp.description,
+    description: bp.description || "",
     furnishingStatus,
-    possessionStatus: "Ready to Move",
-    amenities:
-      amenitiesList.length > 0
-        ? amenitiesList
-        : ["24/7 Security", "Power Backup", "Car Parking", "Water Supply"],
+    possessionStatus: null,
+    amenities: amenitiesList,
     postedDate: new Date(bp.createdAt).toLocaleDateString("en-IN", {
       month: "short",
       day: "numeric",
@@ -312,7 +325,15 @@ export function buildBackendSearchParams(filters: PropertyFilterParams): Record<
     else if (pt === "land") query.propertyType = "LAND";
   }
 
-  // City
+  // Structured State & District (Canonical location precedence)
+  if (filters.state && filters.state.trim()) {
+    query.state = filters.state.trim();
+  }
+  if (filters.district && filters.district.trim()) {
+    query.district = filters.district.trim();
+  }
+
+  // City (Legacy fallback)
   if (filters.city && filters.city !== "All" && filters.city !== "all") {
     query.city = filters.city.trim();
   }
@@ -877,10 +898,10 @@ export function mapPropertyToRentalProperty(p: Property): RentalProperty {
     bhkNumeric: bhkNum,
     bathrooms: p.bathrooms || 2,
     carpetArea: p.carpetArea || "1,200 sq.ft",
-    location: p.location || "Bangalore",
-    locality: p.location?.split(",")?.[0]?.trim() || "Bangalore",
-    city: p.city || "Bangalore",
-    address: p.address || p.location || "Bangalore",
+    location: p.location || "",
+    locality: p.location?.split(",")?.[0]?.trim() || "",
+    city: p.city || "",
+    address: p.address || p.location || "",
     propertyType,
     furnishingStatus,
     tenantPreference: ["Family", "Bachelor", "Working Professional"],
@@ -889,16 +910,13 @@ export function mapPropertyToRentalProperty(p: Property): RentalProperty {
     isOwnerVerified: true,
     sellerType: p.sellerType === "agent" ? "agent" : "owner",
     sellerName: p.sellerName || "Verified Landlord",
-    sellerPhone: p.sellerPhone || "+91 98765 43210",
+    sellerPhone: p.sellerPhone || undefined,
     image:
       p.image ||
       "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
-    images: p.images && p.images.length > 0 ? p.images : [p.image],
-    description: p.description,
-    amenities:
-      p.amenities && p.amenities.length > 0
-        ? p.amenities
-        : ["24/7 Security", "Power Backup", "Car Parking", "Lift"],
+    images: p.images && p.images.length > 0 ? p.images : p.image ? [p.image] : [],
+    description: p.description || "",
+    amenities: p.amenities || [],
     postedDate: p.postedDate || "Recently",
     isFeatured: p.isFeatured,
   };
@@ -930,32 +948,33 @@ export function mapPropertyToCommercialProperty(p: Property): CommercialProperty
     propertyType,
     priceFormatted: formattedPrice,
     priceNumeric: priceNum,
-    carpetArea: p.carpetArea || "2,500 sq.ft",
-    areaNumeric: p.areaNumeric || 2500,
-    location: p.location || "Bangalore",
-    locality: p.location?.split(",")?.[0]?.trim() || "Bangalore",
-    businessDistrict: p.location?.split(",")?.[0]?.trim() || "CBD / Tech Corridor",
-    city: p.city || "Bangalore",
-    address: p.address || p.location || "Bangalore",
-    floor: p.floor || "4th Floor",
-    totalFloors: "12 Floors",
-    parking: "Reserved Parking Available",
+    carpetArea: p.carpetArea || "",
+    areaNumeric: p.areaNumeric || 0,
+    location: p.location || "",
+    locality: p.location?.split(",")?.[0]?.trim() || "",
+    businessDistrict: p.location?.split(",")?.[0]?.trim() || "",
+    city: p.city || "",
+    address: p.address || p.location || "",
+    floor: p.floor || "",
+    totalFloors: "",
+    parking: p.parking || "",
     furnishingStatus,
-    possessionStatus: "Ready to Move",
+    possessionStatus:
+      (p.possessionStatus as
+        | "Ready to Move"
+        | "Under Construction"
+        | "Immediate") || "Ready to Move",
     isReraVerified: p.isReraVerified ?? true,
     reraNumber: p.reraNumber || p.referenceCode,
     sellerType: p.sellerType === "agent" ? "agent" : "owner",
     sellerName: p.sellerName || "Verified Asset Manager",
-    sellerPhone: p.sellerPhone || "+91 98765 43210",
+    sellerPhone: p.sellerPhone || undefined,
     image:
       p.image ||
       "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-    images: p.images && p.images.length > 0 ? p.images : [p.image],
-    description: p.description,
-    amenities:
-      p.amenities && p.amenities.length > 0
-        ? p.amenities
-        : ["High Speed Lifts", "Power Backup", "24/7 Security", "Central AC"],
+    images: p.images && p.images.length > 0 ? p.images : p.image ? [p.image] : [],
+    description: p.description || "",
+    amenities: p.amenities || [],
     securityDeposit: "3 Months Rent",
     maintenanceCharges: "₹ 15 / sq.ft",
     lockInPeriod: "3 Years",

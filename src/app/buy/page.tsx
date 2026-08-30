@@ -6,6 +6,22 @@ export const metadata: Metadata = {
   title: "Properties for Sale in India | Buy Verified Homes | TheVrindaGroup",
   description:
     "Explore verified apartments, independent villas, builder floors, and residential plots for sale across India with TheVrindaGroup.",
+  alternates: {
+    canonical: "https://thevrindagroup.com/buy",
+  },
+  openGraph: {
+    title: "Properties for Sale in India | TheVrindaGroup",
+    description:
+      "Explore verified apartments, independent villas, builder floors, and residential plots for sale across India.",
+    url: "https://thevrindagroup.com/buy",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Properties for Sale in India | TheVrindaGroup",
+    description:
+      "Explore verified apartments, independent villas, builder floors, and residential plots for sale across India.",
+  },
 };
 
 export default function BuyPage() {

@@ -53,8 +53,8 @@ function mapPropertyToManaged(p: Property): ManagedProperty {
   return {
     id: p.id,
     title: p.title,
-    location: p.location || "Bangalore",
-    city: p.city || "Bangalore",
+    location: p.location || "",
+    city: p.city || "",
     price: p.priceNumeric || 0,
     formattedPrice: p.price || "₹0",
     image: p.image || "",
@@ -68,7 +68,7 @@ function mapPropertyToManaged(p: Property): ManagedProperty {
     transactionType,
     category,
     bhk: p.bhk ? `${p.bhk} BHK` : undefined,
-    carpetArea: p.carpetArea || "1,200 sq.ft",
+    carpetArea: p.carpetArea || "",
   };
 }
 
@@ -507,25 +507,27 @@ export function PropertiesManager() {
 
                 {/* Right: Actions */}
                 <div className="flex items-center justify-end gap-2 pt-3 md:pt-0 border-t md:border-t-0 border-border-subtle">
-                  <Link href={publicUrl}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
-                      className="text-xs h-8"
-                    >
-                      View Live
-                    </Button>
-                  </Link>
+                  {property.status === "ACTIVE" && (
+                    <Link href={publicUrl}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
+                        className="text-xs h-8"
+                      >
+                        View Live
+                      </Button>
+                    </Link>
+                  )}
 
                   <Link href={`/post-property?edit=${property.id}`}>
                     <Button
-                      variant="outline"
+                      variant={property.status === "DRAFT" ? "primary" : "outline"}
                       size="sm"
                       leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-                      className="text-xs h-8"
+                      className="text-xs h-8 font-semibold shadow-soft-xs"
                     >
-                      Edit
+                      {property.status === "DRAFT" ? "Complete / Add Details" : "Edit"}
                     </Button>
                   </Link>
 

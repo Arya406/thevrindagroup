@@ -15,6 +15,9 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://thevrindagroup.com"),
+  alternates: {
+    canonical: "/",
+  },
   title: `${BRAND.name} | Buy, Rent & Sell Properties`,
   description: BRAND.description,
   icons: {

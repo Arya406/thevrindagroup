@@ -4,6 +4,8 @@
 
 export type UserRole = "BUYER" | "OWNER" | "AGENT" | "ADMIN";
 
+export type OtpType = "EMAIL_VERIFICATION" | "PHONE_VERIFICATION" | "PASSWORD_RESET";
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -13,6 +15,10 @@ export interface AuthUser {
   isActive?: boolean;
   avatarUrl?: string | null;
   avatar?: string;
+  googleId?: string | null;
+  authProvider?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
   agencyName?: string;
   agencyWebsite?: string;
   lookingFor?: "buy" | "rent" | "both";
@@ -52,14 +58,41 @@ export interface AuthResponse {
   user?: AuthUser;
   session?: AuthSession;
   error?: string;
+  code?: string;
   message?: string;
+  registrationId?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  isComplete?: boolean;
 }
 
-export interface ResetPasswordRequest {
-  identifier: string;
+export interface RequestRegistrationRequest {
+  name: string;
+  email: string;
+  phone?: string;
+  password: string;
+  role?: UserRole;
 }
 
 export interface VerifyOtpRequest {
-  identifier: string;
+  target: string;
+  type: OtpType;
   otp: string;
+  registrationId?: string;
+  identifier?: string; // Legacy compatibility
+}
+
+export interface ResendOtpRequest {
+  target: string;
+  type: OtpType;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  token: string;
+  newPassword: string;
 }

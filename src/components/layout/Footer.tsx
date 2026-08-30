@@ -1,3 +1,6 @@
+
+
+
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -90,107 +93,112 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Buy */}
+          {/* Property for Sale */}
           <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-white">Buy Property</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-white">Property for Sale</p>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Flats in Mumbai
+                <Link href="/buy" className="hover:text-accent-gold transition-colors font-medium">
+                  All Properties for Sale
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Flats in Bangalore
+                <Link href="/property-for-sale/rajasthan" className="hover:text-accent-gold transition-colors">
+                  Properties in Rajasthan
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Flats in Delhi NCR
+                <Link href="/property-for-sale/karnataka" className="hover:text-accent-gold transition-colors">
+                  Properties in Karnataka
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Plots in Hyderabad
+                <Link href="/property-for-sale/delhi" className="hover:text-accent-gold transition-colors">
+                  Properties in Delhi
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Luxury Villas
+                <Link href="/property-for-sale/maharashtra" className="hover:text-accent-gold transition-colors">
+                  Properties in Maharashtra
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Ready to Move
+                <Link href="/post-property" className="text-accent-gold hover:underline transition-colors font-medium">
+                  Post Property for Free &rarr;
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Rent & Commercial */}
+          {/* Property for Rent */}
           <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-white">Rent & Commercial</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-white">Property for Rent</p>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Apartments for Rent
+                <Link href="/rent" className="hover:text-accent-gold transition-colors font-medium">
+                  All Properties for Rent
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Furnished Homes
+                <Link href="/property-for-rent/rajasthan" className="hover:text-accent-gold transition-colors">
+                  Rental in Rajasthan
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Commercial Offices
+                <Link href="/property-for-rent/karnataka" className="hover:text-accent-gold transition-colors">
+                  Rental in Karnataka
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Retail Shops
+                <Link href="/property-for-rent/delhi" className="hover:text-accent-gold transition-colors">
+                  Rental in Delhi
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Co-working Spaces
+                <Link href="/property-for-rent/maharashtra" className="hover:text-accent-gold transition-colors">
+                  Rental in Maharashtra
+                </Link>
+              </li>
+              <li>
+                <Link href="/post-property" className="text-accent-gold hover:underline transition-colors font-medium">
+                  List Rental Space &rarr;
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Popular Cities */}
+          {/* Commercial Property */}
           <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-white">Popular Cities</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-white">Commercial Real Estate</p>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Mumbai MMR
+                <Link href="/commercial" className="hover:text-accent-gold transition-colors font-medium">
+                  All Commercial Spaces
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Bengaluru
+                <Link href="/commercial-property/delhi" className="hover:text-accent-gold transition-colors">
+                  Commercial in Delhi
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Delhi NCR / Gurugram
+                <Link href="/commercial-property/karnataka" className="hover:text-accent-gold transition-colors">
+                  Commercial in Karnataka
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Hyderabad
+                <Link href="/commercial-property/rajasthan" className="hover:text-accent-gold transition-colors">
+                  Commercial in Rajasthan
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Pune
+                <Link href="/commercial-property/maharashtra" className="hover:text-accent-gold transition-colors">
+                  Commercial in Maharashtra
                 </Link>
               </li>
               <li>
-                <Link href="/#featured-properties" className="hover:text-accent-gold transition-colors">
-                  Chennai
+                <Link href="/post-property" className="text-accent-gold hover:underline transition-colors font-medium">
+                  Lease Commercial &rarr;
                 </Link>
               </li>
             </ul>

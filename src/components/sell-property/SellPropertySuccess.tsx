@@ -8,10 +8,23 @@ import React from "react";
 import Link from "next/link";
 import { CheckCircle2, Clock, Building2, MapPin, Tag, ArrowRight, PlusCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui";
-import { SubmittedPropertyResult } from "@/types/sellProperty";
 
-interface SellPropertySuccessProps {
-  property: SubmittedPropertyResult;
+export interface PropertySuccessSummary {
+  id: string;
+  referenceCode: string;
+  title: string;
+  category: string;
+  subtype: string;
+  city: string;
+  locality: string;
+  area?: string;
+  price: string;
+  status: string;
+  submittedAt: string;
+}
+
+export interface SellPropertySuccessProps {
+  property: PropertySuccessSummary;
   onReset: () => void;
 }
 
